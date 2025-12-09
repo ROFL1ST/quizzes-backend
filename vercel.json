@@ -1,9 +1,21 @@
 {
   "version": 2,
-  "rewrites": [
+  "builds": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.go"
+      "src": "api/index.go",
+      "use": "vercel-go@1.0.0"
     }
-  ]
+  ],
+  "functions": {
+    "api/index.go": {
+      "runtime": "vercel-go@1.0.0",
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "DATABASE_URL": "@DATABASE_URL",
+    "JWT_SECRET": "@JWT_SECRET",
+    "PORT": "@PORT"
+  }
 }
