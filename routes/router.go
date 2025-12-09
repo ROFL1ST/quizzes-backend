@@ -38,6 +38,7 @@ func SetupRoutes(app *fiber.App) {
 	history := api.Group("/history", middleware.Protected())
 	history.Post("/", controllers.SaveHistory)
 	history.Get("/", controllers.GetMyHistory)
+	history.Get("/:id", controllers.GetHistoryByID)
 
 	friends := api.Group("/friends", middleware.Protected())
 	friends.Post("/add", controllers.AddFriend)

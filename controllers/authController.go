@@ -14,19 +14,30 @@ import (
 )
 
 func RegisterUser(c *fiber.Ctx) error {
-	var input models.User
+	// Gunakan struct sementara, JANGAN models.User
+	var input struct {
+		Name     string `json:"name"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
 	if err := c.BodyParser(&input); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input data", err.Error())
 	}
 
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
-	input.Password = string(hashed)
 
-	if err := config.DB.Create(&input).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username exists", err.Error())
+	newUser := models.User{
+		Name:     input.Name,
+		Username: input.Username,
+		Password: string(hashed),
 	}
 
-	return utils.SuccessResponse(c, fiber.StatusCreated, "User registered", input)
+	if err := config.DB.Create(&newUser).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username already exists", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusCreated, "User registered successfully", newUser)
 }
 
 func LoginUser(c *fiber.Ctx) error {
@@ -46,7 +57,7 @@ func LoginUser(c *fiber.Ctx) error {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Incorrect password", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Incorrect password", nil)
 	}
 
 	claims := jwt.MapClaims{

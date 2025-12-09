@@ -11,7 +11,7 @@ import (
 func main() {
 	config.ConnectDB()
 	config.SeedDatabase()
-
+	config.SeedExamData()
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{
