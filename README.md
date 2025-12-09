@@ -1,4 +1,4 @@
-````markdown
+
 # 🧠 Quizzes Backend API
 
 Backend service yang kuat dan skalabel untuk aplikasi Kuis Online. Dibangun menggunakan **Golang**, **Fiber**, dan **PostgreSQL**.
@@ -143,5 +143,3 @@ File: `quiz_collection.json` (Silakan import ke Postman).
 
 Made with ❤️ by [ROFL1ST](https://github.com/ROFL1ST)
 
-```
-```
