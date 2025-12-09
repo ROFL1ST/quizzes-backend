@@ -41,9 +41,15 @@ func SetupRoutes(app *fiber.App) {
 	history.Get("/:id", controllers.GetHistoryByID)
 
 	friends := api.Group("/friends", middleware.Protected())
-	friends.Post("/add", controllers.AddFriend)
-	friends.Get("/", controllers.GetMyFriends)
-	friends.Delete("/:id", controllers.RemoveFriend)
+	
+	friends.Get("/", controllers.GetMyFriends)           // Lihat daftar teman (accepted)
+	friends.Get("/requests", controllers.GetFriendRequests) // Lihat request masuk
+	
+	friends.Post("/request", controllers.RequestFriend)  // Minta berteman
+	friends.Post("/confirm", controllers.ConfirmFriend)  // Terima teman
+	friends.Post("/refuse", controllers.RefuseFriend)    // Tolak teman
+	
+	friends.Delete("/:id", controllers.RemoveFriend)     // Hapus teman
 
 	api.Get("/leaderboard/:slug", middleware.Protected(), controllers.GetLeaderboardByTopic)
 }
