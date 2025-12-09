@@ -15,7 +15,7 @@ func main() {
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "https://kuis-imk.vercel.app",
+		AllowOrigins: "https://kuis-imk.vercel.app, http://localhost:5173/",
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
 

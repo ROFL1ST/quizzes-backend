@@ -154,3 +154,34 @@ func RemoveFriend(c *fiber.Ctx) error {
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Friend removed", nil)
 }
+
+// 7. Get Sent Requests (Lihat siapa saja yang saya add tapi belum di-acc)
+func GetSentRequests(c *fiber.Ctx) error {
+	myID := c.Locals("user_id").(float64)
+	var requests []models.Friendship
+
+	// Cari yang UserID-nya SAYA, status pending, dan preload data 'Friend' (orang yang dituju)
+	config.DB.Preload("Friend").
+		Where("user_id = ? AND status = 'pending'", myID).
+		Find(&requests)
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Sent requests retrieved", requests)
+}
+
+// 8. Cancel Request (Batalkan permintaan yang sudah dikirim)
+func CancelRequest(c *fiber.Ctx) error {
+	myID := c.Locals("user_id").(float64)
+	targetID := c.Params("id") // ID user yang mau dibatalkan request-nya
+
+	// Hapus hanya jika status masih 'pending' dan pengirimnya adalah saya
+	result := config.DB.Where(
+		"user_id = ? AND friend_id = ? AND status = 'pending'",
+		myID, targetID,
+	).Delete(&models.Friendship{})
+
+	if result.RowsAffected == 0 {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Request not found or already accepted", nil)
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Request cancelled", nil)
+}	
