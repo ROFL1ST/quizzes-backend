@@ -532,7 +532,7 @@
 					"response": []
 				},
 				{
-					"name": "New Request",
+					"name": "Get My History By Id",
 					"id": "29636077-8f67d01c-80ec-44eb-a218-e13416c1bd8a",
 					"protocolProfileBehavior": {
 						"disableBodyPruning": true
