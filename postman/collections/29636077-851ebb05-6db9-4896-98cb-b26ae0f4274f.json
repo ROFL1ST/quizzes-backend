@@ -1,0 +1,694 @@
+{
+	"info": {
+		"_postman_id": "29636077-851ebb05-6db9-4896-98cb-b26ae0f4274f",
+		"name": "Quizzes Backend API (Golang Fiber)",
+		"description": "Koleksi API untuk aplikasi Kuis dengan fitur RBAC, Friends, Leaderboard, dan History.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Auth (User & Admin)",
+			"item": [
+				{
+					"name": "User Register",
+					"id": "29636077-418d0c62-db61-4e00-8d6b-c370ee9ac873",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Budi Santoso\",\n    \"username\": \"budi123\",\n    \"password\": \"rahasia\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "User Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.status === \"success\") {",
+									"    pm.collectionVariables.set(\"user_token\", jsonData.data.token);",
+									"    console.log(\"User Token Saved!\");",
+									"}"
+								],
+								"type": "text/javascript",
+								"id": "8db8355b-8bbd-41c0-9f02-0601e76b482a"
+							}
+						}
+					],
+					"id": "29636077-49df4db2-4a5b-4e57-a93d-a60e7eec5b20",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"budi123\",\n    \"password\": \"rahasia\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"login"
+							]
+						},
+						"description": "Token akan otomatis tersimpan ke variable 'user_token'."
+					},
+					"response": []
+				},
+				{
+					"name": "Admin Register",
+					"id": "29636077-385e0082-8da0-49ae-9d45-87457dbf9e82",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Pak Dosen\",\n    \"username\": \"dosen1\",\n    \"password\": \"123456\",\n    \"role_id\": 3  \n    // 1=Supervisor, 2=Admin, 3=Pengajar (Sesuaikan dengan DB)\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"admin",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Admin Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.status === \"success\") {",
+									"    pm.collectionVariables.set(\"admin_token\", jsonData.data.token);",
+									"    console.log(\"Admin Token Saved!\");",
+									"}"
+								],
+								"type": "text/javascript",
+								"id": "496f876a-8541-491a-83af-cecde4335ef9"
+							}
+						}
+					],
+					"id": "29636077-031b4efd-7474-41eb-a351-e9233ddf9733",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"superadmin\",\n    \"password\": \"123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"admin",
+								"login"
+							]
+						},
+						"description": "Gunakan akun superadmin/123456 untuk awal. Token otomatis tersimpan ke variable 'admin_token'."
+					},
+					"response": []
+				}
+			],
+			"id": "29636077-b17db0f8-0bb3-4aac-a0ac-b05a48138702"
+		},
+		{
+			"name": "2. Admin Management",
+			"item": [
+				{
+					"name": "Create Topic (Mata Kuliah)",
+					"id": "29636077-a6cd52d8-c5b4-438e-9317-05284a93a383",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"slug\": \"imk\",\n    \"title\": \"Interaksi Manusia Komputer\",\n    \"description\": \"Belajar UI/UX\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/topics",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"admin",
+								"topics"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Quiz (Wadah Soal)",
+					"id": "29636077-277a95c5-c81d-47d2-9758-7ad782368c97",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"topic_id\": 1,\n    \"title\": \"Kuis 1: Pengantar\",\n    \"description\": \"Materi minggu pertama\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/quizzes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"admin",
+								"quizzes"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Question (Butir Soal)",
+					"id": "29636077-583a3d94-10c6-427d-80a2-cf48742141ca",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quiz_id\": 1,\n    \"question\": \"Apa kepanjangan IMK?\",\n    \"options\": [\"Interaksi Manusia Komputer\", \"Internet Masuk Kampung\", \"Indomie Makan Krupuk\"],\n    \"correct\": \"Interaksi Manusia Komputer\",\n    \"hint\": \"Mata kuliah kita\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/questions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"admin",
+								"questions"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Role (Supervisor Only)",
+					"id": "29636077-ab04c8a0-c31c-41c9-8d16-da3037e52fb2",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"editor\",\n    \"description\": \"Tukang edit soal\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"admin",
+								"roles"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Roles",
+					"id": "29636077-31f5a93d-40d7-4c3a-9123-46b8dc03bfd7",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"admin",
+								"roles"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"id": "29636077-8c2344a3-25a7-4810-880b-66a423b03874"
+		},
+		{
+			"name": "3. User Gameplay",
+			"item": [
+				{
+					"name": "Get All Topics (Public)",
+					"id": "29636077-6d88445a-e1b4-4984-9560-97f046491f58",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/topics",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"topics"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Quizzes by Topic Slug",
+					"id": "29636077-8761455b-212f-466f-b529-5fc4380e71d9",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{user_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/topics/imk/quizzes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"topics",
+								"imk",
+								"quizzes"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Questions by Quiz ID",
+					"id": "29636077-69b8a600-79a1-4c3b-b0c5-f9482ee1ddcf",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{user_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/quizzes/1/questions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"quizzes",
+								"1",
+								"questions"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Save History (Submit Score)",
+					"id": "29636077-f1898533-db24-4ea8-9ec1-1ffddf10570b",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{user_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quiz_id\": 1,\n    \"quiz_title\": \"Kuis 1: Pengantar\",\n    \"score\": 100,\n    \"total_soal\": 10,\n    \"snapshot\": {\"1\": \"A\", \"2\": \"B\"}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/history",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"history"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get My History",
+					"id": "29636077-b707e681-9165-43f5-90c8-ce9913c7d497",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{user_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/history",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"history"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"id": "29636077-44365fea-dcee-4075-9321-ca8e74ecae8b"
+		},
+		{
+			"name": "4. Social & Leaderboard",
+			"item": [
+				{
+					"name": "Add Friend",
+					"id": "29636077-efc595df-d031-41a3-a90b-7aba7a5befd3",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{user_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"teman_budi\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/friends/add",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"friends",
+								"add"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Friends",
+					"id": "29636077-eca182b1-44f8-48b7-9699-c071bafd15e9",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{user_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/friends",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"friends"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Friend",
+					"id": "29636077-e2d17740-4176-4259-b063-d74323f5e200",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{user_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/friends/5",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"friends",
+								"5"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Leaderboard (IMK)",
+					"id": "29636077-4d9c3567-8107-48e8-bf19-69153aef7a0b",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{user_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/leaderboard/imk",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"leaderboard",
+								"imk"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"id": "29636077-b147341c-5578-4bd3-a5e7-423a1de8ccb2"
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000/api"
+		},
+		{
+			"key": "user_token",
+			"value": ""
+		},
+		{
+			"key": "admin_token",
+			"value": ""
+		}
+	]
+}
