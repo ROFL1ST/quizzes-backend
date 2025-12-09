@@ -1,13 +1,8 @@
 {
   "version": 2,
   "functions": {
-    "api/index.go": {
-      "runtime": "vercel-go@1.0.0"
+    "api/*.go": {
+      "runtime": "go1.x"
     }
-  },
-  "env": {
-    "DATABASE_URL": "DATABASE_URL",
-    "JWT_SECRET": "JWT_SECRET",
-    "PORT": "8080"
   }
 }
