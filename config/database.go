@@ -14,41 +14,45 @@ import (
 var DB *gorm.DB
 
 func ConnectDB() {
-	// 1. Coba load .env (Hanya berguna di Lokal, di Vercel ini akan di-skip/error harmless)
-	if err := godotenv.Load(); err != nil {
-		fmt.Println("⚠️  Note: File .env tidak ditemukan, menggunakan environment system.")
+	// Load .env hanya saat lokal (di Vercel file .env tidak ada)
+	if os.Getenv("VERCEL_ENV") == "" {
+		_ = godotenv.Load()
 	}
 
 	var dsn string
 
-	// 2. Prioritas 1: Gunakan DATABASE_URL (Neon/Vercel/Cloud)
-	if os.Getenv("DATABASE_URL") != "" {
-		dsn = os.Getenv("DATABASE_URL")
-		fmt.Println("🔍 Menggunakan koneksi via DATABASE_URL...")
+	// === PRIORITAS 1 : DATABASE_URL ===
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL != "" {
+		dsn = dbURL
+		fmt.Println("🔍 Using DATABASE_URL")
 	} else {
-		// 3. Prioritas 2: Gunakan variabel terpisah (Lokal Docker/PGAdmin)
-		// Kita cek dulu apakah DB_HOST ada, untuk menghindari error string kosong
-		if os.Getenv("DB_HOST") == "" {
-			log.Fatal("❌ Error: DATABASE_URL tidak ada, dan DB_HOST juga kosong! Pastikan konfigurasi database benar.")
+
+		// Pastikan minimal DB_HOST tersedia
+		host := os.Getenv("DB_HOST")
+		if host == "" {
+			log.Fatal("❌ DATABASE_URL kosong, dan DB_HOST kosong! Environment variable tidak terbaca!")
 		}
 
-		dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Jakarta",
-			os.Getenv("DB_HOST"),
+		dsn = fmt.Sprintf(
+			"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Jakarta",
+			host,
 			os.Getenv("DB_USER"),
 			os.Getenv("DB_PASSWORD"),
 			os.Getenv("DB_NAME"),
 			os.Getenv("DB_PORT"),
 		)
-		fmt.Println("🔍 Menggunakan koneksi via Variable Host/Port...")
+
+		fmt.Println("🔍 Using separated DB_* variables")
 	}
 
-	// 4. Buka Koneksi GORM
+	// === CONNECT TO DB ===
 	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatal("🔥 Gagal koneksi ke database:", err)
+		log.Fatal("🔥 Gagal konek DB:", err)
 	}
 
-	// 5. Auto Migrate
+	// === MIGRATIONS ===
 	err = database.AutoMigrate(
 		&models.Role{},
 		&models.Admin{},
@@ -61,9 +65,9 @@ func ConnectDB() {
 	)
 
 	if err != nil {
-		log.Fatal("❌ Database Migration Failed:", err)
+		log.Fatal("❌ Gagal migrate database:", err)
 	}
 
 	DB = database
-	fmt.Println("🚀 Sukses! Terhubung ke Database.")
+	fmt.Println("🚀 Database Connected Successfully!")
 }
