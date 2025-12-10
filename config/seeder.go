@@ -41,3 +41,4 @@ func SeedDatabase() {
 	DB.Create(&superAdmin)
 	fmt.Println("Seeding done! User: superadmin | Pass: 123456")
 }
+

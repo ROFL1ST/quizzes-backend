@@ -161,3 +161,36 @@ func GetUserProfile(c *fiber.Ctx) error {
 		"stats":    stats,
 	})
 }
+
+func GetMyAchievements(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(float64)
+
+	// 1. Ambil semua achievement master
+	var allAchievements []models.Achievement
+	config.DB.Order("id asc").Find(&allAchievements)
+
+	// 2. Ambil achievement yang sudah dimiliki user
+	var userAchievements []models.UserAchievement
+	config.DB.Where("user_id = ?", userID).Find(&userAchievements)
+
+	// 3. Mapping agar frontend mudah membacanya (Unlocked: true/false)
+	unlockedMap := make(map[uint]bool)
+	for _, ua := range userAchievements {
+		unlockedMap[ua.AchievementID] = true
+	}
+
+	type AchievementResponse struct {
+		models.Achievement
+		IsUnlocked bool `json:"is_unlocked"`
+	}
+
+	var response []AchievementResponse
+	for _, ach := range allAchievements {
+		response = append(response, AchievementResponse{
+			Achievement: ach,
+			IsUnlocked:  unlockedMap[ach.ID],
+		})
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Achievements retrieved", response)
+}

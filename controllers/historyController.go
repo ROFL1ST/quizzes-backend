@@ -1,13 +1,13 @@
 package controllers
 
 import (
+	"encoding/json"
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
 	"github.com/gofiber/fiber/v2"
-	"strconv"
-	"encoding/json"
 	"gorm.io/gorm"
+	"strconv"
 )
 
 func SaveHistory(c *fiber.Ctx) error {
@@ -20,6 +20,7 @@ func SaveHistory(c *fiber.Ctx) error {
 	if err := config.DB.Create(&history).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed save history", err.Error())
 	}
+	go utils.CheckQuizAchievements(history.UserID, history.Score)
 	go func(uid uint, qID uint, score int) {
 		var challenge models.Challenge
 		err := config.DB.Where(
