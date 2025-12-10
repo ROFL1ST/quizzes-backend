@@ -366,6 +366,18 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "Get Quiz",
+					"id": "29636077-7250751b-6fc9-4b29-94d8-2c237570c3ae",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
 				}
 			],
 			"id": "29636077-8c2344a3-25a7-4810-880b-66a423b03874"
