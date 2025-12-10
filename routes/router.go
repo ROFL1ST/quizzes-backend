@@ -26,8 +26,8 @@ func SetupRoutes(app *fiber.App) {
 	topicAdmin := adminGroup.Group("/topics", middleware.AllowRoles("supervisor", "admin"))
 	topicAdmin.Get("/", controllers.GetAllTopicsAdmin)
 	topicAdmin.Post("/", controllers.PostTopicAdmin)
-	topicAdmin.Put("/:id", controllers.UpdateTopicAdmin)
-	topicAdmin.Delete("/:id", controllers.DeleteTopicAdmin)
+	topicAdmin.Put("/:slug", controllers.UpdateTopicAdmin)
+	topicAdmin.Delete("/:slug", controllers.DeleteTopicAdmin)
 	topicAdmin.Get("/:slug", controllers.GetTopicBySlug)
 
 	// quiz admin routes
