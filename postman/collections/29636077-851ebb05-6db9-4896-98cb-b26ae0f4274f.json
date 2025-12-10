@@ -368,7 +368,7 @@
 					"response": []
 				},
 				{
-					"name": "New Request",
+					"name": "Get Quiz",
 					"id": "29636077-7250751b-6fc9-4b29-94d8-2c237570c3ae",
 					"protocolProfileBehavior": {
 						"disableBodyPruning": true
