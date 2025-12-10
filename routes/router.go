@@ -87,4 +87,10 @@ func SetupRoutes(app *fiber.App) {
 
 	// Activity Feed
 	api.Get("/feed", middleware.Protected(), controllers.GetFriendActivity)
+
+	// User Profile & Settings
+	userGroup := api.Group("/users", middleware.Protected())
+    userGroup.Get("/me", controllers.GetMyProfile)        // Lihat profil & statistik sendiri
+    userGroup.Put("/me", controllers.UpdateProfile)       // Ganti nama/password
+    userGroup.Get("/:username", controllers.GetUserProfile)
 }
