@@ -122,7 +122,7 @@ func DeleteTopicAdmin(c *fiber.Ctx) error {
 }
 
 func UpdateTopicAdmin(c *fiber.Ctx) error {
-	id := c.Params("id")
+	id := c.Params("slug")
 	var topic models.Topic
 	if err := config.DB.First(&topic, id).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Topic not found", nil)

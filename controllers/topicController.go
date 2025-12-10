@@ -26,3 +26,12 @@ func GetAllTopics(c *fiber.Ctx) error {
 	config.DB.Find(&topics)
 	return utils.SuccessResponse(c, fiber.StatusOK, "Topics retrieved", topics)
 }
+
+func GetTopicBySlug(c *fiber.Ctx) error {
+	slug := c.Params("slug")
+	var topic models.Topic
+	if err := config.DB.Where("slug = ?", slug).First(&topic).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Topic not found", nil)
+	}
+	return utils.SuccessResponse(c, fiber.StatusOK, "Topic retrieved", topic)
+}
