@@ -3,6 +3,9 @@ package utils
 import (
 	"regexp"
 	"strings"
+	"time"
+	"fmt"
+	"math/rand"
 )
 
 func GenerateSlug(input string) string {
@@ -18,6 +21,7 @@ func GenerateSlug(input string) string {
 	slug = reg2.ReplaceAllString(slug, "-")
 
 	slug = strings.Trim(slug, "-")
-
-	return slug
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	randomNumber := r.Intn(9000) + 1000
+	return fmt.Sprintf("%s-%d", slug, randomNumber)
 }
