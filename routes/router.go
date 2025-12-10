@@ -21,8 +21,23 @@ func SetupRoutes(app *fiber.App) {
 	adminGroup := api.Group("/admin", middleware.Protected())
 
 	adminGroup.Get("/analytics", middleware.AllowRoles("supervisor", "admin"), controllers.GetDashboardAnalytics)
+
+	// topic admin routes
+	topicAdmin := adminGroup.Group("/topics", middleware.AllowRoles("supervisor", "admin"))
+	topicAdmin.Get("/", controllers.GetAllTopicsAdmin)
+	topicAdmin.Post("/", controllers.PostTopicAdmin)
+	topicAdmin.Put("/:id", controllers.UpdateTopicAdmin)
+	topicAdmin.Delete("/:id", controllers.DeleteTopicAdmin)
+
+	// quiz admin routes
 	adminGroup.Get("/users", controllers.GetAllUsers)
-	adminGroup.Get("/quizzes", controllers.GetAllQuizzesAdmin)
+	quizzesAdmin := adminGroup.Group("/quizzes", middleware.AllowRoles("supervisor", "admin", "pengajar"))
+	quizzesAdmin.Post("/", controllers.CreateQuiz)
+	quizzesAdmin.Put("/:id", controllers.UpdateQuizAdmin)
+	quizzesAdmin.Delete("/:id", controllers.DeleteQuizAdmin)
+	quizzesAdmin.Get("/analysis/:id", controllers.GetQuizAnalysisAdminById)
+
+	// role management
 	roleGroup := adminGroup.Group("/roles", middleware.AllowRoles("supervisor"))
 	roleGroup.Post("/", controllers.CreateRole)
 	roleGroup.Get("/", controllers.GetAllRoles)
@@ -30,14 +45,14 @@ func SetupRoutes(app *fiber.App) {
 	topicGroup := adminGroup.Group("/topics", middleware.AllowRoles("supervisor", "admin"))
 	topicGroup.Post("/", controllers.CreateTopic)
 
-	quizGroup := adminGroup.Group("/quizzes", middleware.AllowRoles("supervisor", "admin", "pengajar"))
-	quizGroup.Post("/", controllers.CreateQuiz)
-
+	// question admin routes
 	questionGroup := adminGroup.Group("/questions", middleware.AllowRoles("supervisor", "admin", "pengajar"))
 	questionGroup.Post("/", controllers.CreateQuestion)
 	questionGroup.Post("/bulk", controllers.BulkUploadQuestions)
-	questionGroup.Get("/analysis/:id", controllers.GetQuizAnalysis)
-
+	questionGroup.Put("/:id", controllers.UpdateQuestionAdmin)
+	questionGroup.Delete("/:id", controllers.DeleteQuestionAdmin)
+	// =============================================================
+	
 	// User Routes
 	api.Get("/topics/:slug/quizzes", middleware.Protected(), controllers.GetQuizzesByTopicSlug)
 	api.Get("/quizzes/:id/questions", middleware.Protected(), controllers.GetQuestionsByQuizID)
