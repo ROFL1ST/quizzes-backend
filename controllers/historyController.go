@@ -8,19 +8,31 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 	"strconv"
+	"sync"
 )
 
 func SaveHistory(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 	var history models.History
+
+	
 	if err := c.BodyParser(&history); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid data", err.Error())
 	}
+
+
 	history.UserID = uint(userID)
 	if err := config.DB.Create(&history).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed save history", err.Error())
 	}
+
+	
+	var wg sync.WaitGroup
+
+	
+	wg.Add(1) 
 	go func(uid uint, qID uint, score int) {
+		defer wg.Done()
 		var challenge models.Challenge
 		err := config.DB.Where(
 			"quiz_id = ? AND status = 'active' AND (challenger_id = ? OR opponent_id = ?)",
@@ -28,18 +40,18 @@ func SaveHistory(c *fiber.Ctx) error {
 		).First(&challenge).Error
 
 		if err == nil {
-			// Update skor user yang mengerjakan
+		
 			if challenge.ChallengerID == uid {
 				challenge.ChallengerScore = score
 			} else {
 				challenge.OpponentScore = score
 			}
 
-			// Cek apakah kedua pemain sudah bermain (skor != -1)
+			
 			if challenge.ChallengerScore != -1 && challenge.OpponentScore != -1 {
 				challenge.Status = "finished"
 
-				// Tentukan Pemenang
+				
 				if challenge.ChallengerScore > challenge.OpponentScore {
 					winner := challenge.ChallengerID
 					challenge.WinnerID = &winner
@@ -47,13 +59,14 @@ func SaveHistory(c *fiber.Ctx) error {
 					winner := challenge.OpponentID
 					challenge.WinnerID = &winner
 				}
-				// Jika seri, WinnerID tetap null
+				
 			}
 			config.DB.Save(&challenge)
 		}
 	}(uint(userID), history.QuizID, history.Score)
+
+
 	go func(quizID uint, snapshotJSON []byte) {
-		// Ambil kunci jawaban
 		var questions []models.Question
 		config.DB.Where("quiz_id = ?", quizID).Find(&questions)
 		keyMap := make(map[uint]string)
@@ -61,11 +74,9 @@ func SaveHistory(c *fiber.Ctx) error {
 			keyMap[q.ID] = q.CorrectAnswer
 		}
 
-		// Parsing jawaban user
 		var userAnswers map[string]string
 		json.Unmarshal(snapshotJSON, &userAnswers)
 
-		// Update counter benar/salah
 		for qIDStr, answer := range userAnswers {
 			qID, _ := strconv.Atoi(qIDStr)
 			if correctAnswer, exists := keyMap[uint(qID)]; exists {
@@ -79,19 +90,19 @@ func SaveHistory(c *fiber.Ctx) error {
 			}
 		}
 	}(history.QuizID, history.Snapshot)
+
+
 	var user models.User
 	if err := config.DB.First(&user, uint(userID)).Error; err == nil {
-
 		// Tambah XP
 		xpGained := history.Score
 		user.XP += int64(xpGained)
 
-		// Cek Level Up (Rumus: Level = XP / 1000 + 1)
+		
 		newLevel := int((user.XP / 1000)) + 1
 		if newLevel > user.Level {
 			user.Level = newLevel
 
-			// Simpan Activity Level Up
 			activity := models.Activity{
 				UserID:      user.ID,
 				Type:        "level_up",
@@ -101,7 +112,6 @@ func SaveHistory(c *fiber.Ctx) error {
 		}
 		config.DB.Save(&user)
 
-		// Simpan Activity Quiz Completed
 		feed := models.Activity{
 			UserID:      user.ID,
 			Type:        "quiz_completed",
@@ -109,7 +119,12 @@ func SaveHistory(c *fiber.Ctx) error {
 		}
 		config.DB.Create(&feed)
 	}
-	go utils.CheckQuizAchievements(history.UserID, history.Score)
+
+	
+	go func() {
+		wg.Wait() 
+		utils.CheckQuizAchievements(history.UserID, history.Score)
+	}()
 
 	return utils.SuccessResponse(c, fiber.StatusCreated, "History saved", history)
 }
