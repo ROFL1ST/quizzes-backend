@@ -106,7 +106,7 @@ func PostTopicAdmin(c *fiber.Ctx) error {
 	if err := c.BodyParser(&topic); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
 	}
-
+	topic.Slug = utils.GenerateSlug(topic.Title)
 	if err := config.DB.Create(&topic).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed create topic", err.Error())
 	}
