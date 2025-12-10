@@ -8,5 +8,6 @@ type Quiz struct {
 	Topic       Topic      `json:"-" gorm:"foreignKey:TopicID"`
 	Title       string     `json:"title"`
 	Description string     `json:"description"`
+	Active      bool       `json:"active" gorm:"default:false"`
 	Questions   []Question `json:"-" gorm:"foreignKey:QuizID"`
 }

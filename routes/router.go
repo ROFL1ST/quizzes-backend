@@ -32,6 +32,7 @@ func SetupRoutes(app *fiber.App) {
 	// quiz admin routes
 	adminGroup.Get("/users", controllers.GetAllUsers)
 	quizzesAdmin := adminGroup.Group("/quizzes", middleware.AllowRoles("supervisor", "admin", "pengajar"))
+	quizzesAdmin.Get("/", controllers.GetAllQuizzesAdmin)
 	quizzesAdmin.Post("/", controllers.CreateQuiz)
 	quizzesAdmin.Put("/:id", controllers.UpdateQuizAdmin)
 	quizzesAdmin.Delete("/:id", controllers.DeleteQuizAdmin)
@@ -47,12 +48,13 @@ func SetupRoutes(app *fiber.App) {
 
 	// question admin routes
 	questionGroup := adminGroup.Group("/questions", middleware.AllowRoles("supervisor", "admin", "pengajar"))
+	questionGroup.Get("/", controllers.GetAllQuestionsAdmin)
 	questionGroup.Post("/", controllers.CreateQuestion)
 	questionGroup.Post("/bulk", controllers.BulkUploadQuestions)
 	questionGroup.Put("/:id", controllers.UpdateQuestionAdmin)
 	questionGroup.Delete("/:id", controllers.DeleteQuestionAdmin)
 	// =============================================================
-	
+
 	// User Routes
 	api.Get("/topics/:slug/quizzes", middleware.Protected(), controllers.GetQuizzesByTopicSlug)
 	api.Get("/quizzes/:id/questions", middleware.Protected(), controllers.GetQuestionsByQuizID)
