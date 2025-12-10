@@ -18,6 +18,7 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/topics", controllers.GetAllTopics)
 
 	// Admin Routes
+	api.Get("/admin/analytics", middleware.Protected(), middleware.AllowRoles("supervisor", "admin"), controllers.GetDashboardAnalytics)
 	roleGroup := api.Group("/admin/roles", middleware.Protected(), middleware.AllowRoles("supervisor"))
 	roleGroup.Post("/", controllers.CreateRole)
 	roleGroup.Get("/", controllers.GetAllRoles)

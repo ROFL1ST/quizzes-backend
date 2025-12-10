@@ -8,10 +8,18 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/lib/pq"
+	"time"
 )
+
+type DashboardAnalytics struct {
+	TotalUsers    int64   `json:"total_users"`
+	TotalQuizzes  int64   `json:"total_quizzes"`
+	TotalAttempts int64   `json:"total_attempts"` // Total riwayat pengerjaan
+	AverageScore  float64 `json:"average_score"`
+	ActiveUsers   int64   `json:"active_users"` // User aktif 7 hari terakhir
+}
 
 type QuestionAnalysis struct {
 	ID             uint   `json:"id"`
@@ -21,6 +29,44 @@ type QuestionAnalysis struct {
 	TotalAttempts  int    `json:"total_attempts"`
 	Difficulty     string `json:"difficulty"`    // Mudah, Sedang, Sulit
 	AccuracyRate   string `json:"accuracy_rate"` // Contoh: "85.5%"
+}
+
+func GetDashboardAnalytics(c *fiber.Ctx) error {
+	var totalUsers, totalQuizzes, totalAttempts int64
+	var avgScore float64
+
+	if err := config.DB.Model(&models.User{}).Count(&totalUsers).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting users", nil)
+	}
+
+	if err := config.DB.Model(&models.Quiz{}).Count(&totalQuizzes).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting quizzes", nil)
+	}
+
+	if err := config.DB.Model(&models.History{}).Count(&totalAttempts).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting history", nil)
+	}
+
+	if err := config.DB.Model(&models.History{}).Select("COALESCE(AVG(score), 0)").Scan(&avgScore).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error calculating average", nil)
+	}
+
+	var activeUsers int64
+	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
+	if err := config.DB.Model(&models.History{}).
+		Where("created_at >= ?", sevenDaysAgo).
+		Distinct("user_id").
+		Count(&activeUsers).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting active users", nil)
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Dashboard analytics retrieved", DashboardAnalytics{
+		TotalUsers:    totalUsers,
+		TotalQuizzes:  totalQuizzes,
+		TotalAttempts: totalAttempts,
+		AverageScore:  avgScore,
+		ActiveUsers:   activeUsers,
+	})
 }
 
 func BulkUploadQuestions(c *fiber.Ctx) error {
