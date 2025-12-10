@@ -35,7 +35,7 @@ func GetQuizzesByTopicSlug(c *fiber.Ctx) error {
 	}
 
 	var quizzes []models.Quiz
-	config.DB.Where("topic_id = ?", topic.ID).Find(&quizzes)
+	config.DB.Where("(topic_id = ?) AND active=TRUE", topic.ID).Find(&quizzes)
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Quizzes retrieved", quizzes)
 }

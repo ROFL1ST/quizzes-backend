@@ -16,9 +16,9 @@ import (
 type DashboardAnalytics struct {
 	TotalUsers    int64   `json:"total_users"`
 	TotalQuizzes  int64   `json:"total_quizzes"`
-	TotalAttempts int64   `json:"total_attempts"` // Total riwayat pengerjaan
+	TotalAttempts int64   `json:"total_attempts"`
 	AverageScore  float64 `json:"average_score"`
-	ActiveUsers   int64   `json:"active_users"` // User aktif 7 hari terakhir
+	ActiveUsers   int64   `json:"active_users"`
 }
 
 type QuestionAnalysis struct {
@@ -27,8 +27,8 @@ type QuestionAnalysis struct {
 	CorrectCount   int    `json:"correct_count"`
 	IncorrectCount int    `json:"incorrect_count"`
 	TotalAttempts  int    `json:"total_attempts"`
-	Difficulty     string `json:"difficulty"`    // Mudah, Sedang, Sulit
-	AccuracyRate   string `json:"accuracy_rate"` // Contoh: "85.5%"
+	Difficulty     string `json:"difficulty"`
+	AccuracyRate   string `json:"accuracy_rate"`
 }
 
 func GetDashboardAnalytics(c *fiber.Ctx) error {
@@ -69,10 +69,6 @@ func GetDashboardAnalytics(c *fiber.Ctx) error {
 	})
 }
 
-
-
-
-
 func GetAllUsers(c *fiber.Ctx) error {
 	var users []models.User
 	if err := config.DB.Order("created_at desc").Find(&users).Error; err != nil {
@@ -81,12 +77,28 @@ func GetAllUsers(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusOK, "Users retrieved", users)
 }
 
+// ========== TOPICS WITH PAGINATION ==========
 func GetAllTopicsAdmin(c *fiber.Ctx) error {
+	params := utils.GetPaginationParams(c)
+	
 	var topics []models.Topic
-	if err := config.DB.Order("created_at desc").Find(&topics).Error; err != nil {
+	var total int64
+
+	// Hitung total data
+	if err := config.DB.Model(&models.Topic{}).Count(&total).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to count topics", nil)
+	}
+
+	// Ambil data dengan pagination
+	if err := config.DB.
+		Order("created_at desc").
+		Limit(params.PageSize).
+		Offset(params.Offset).
+		Find(&topics).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch topics", nil)
 	}
-	return utils.SuccessResponse(c, fiber.StatusOK, "Topics retrieved", topics)
+
+	return utils.PaginatedSuccessResponse(c, fiber.StatusOK, "Topics retrieved", topics, total, params)
 }
 
 func PostTopicAdmin(c *fiber.Ctx) error {
@@ -110,7 +122,7 @@ func DeleteTopicAdmin(c *fiber.Ctx) error {
 }
 
 func UpdateTopicAdmin(c *fiber.Ctx) error {
-	id := c.Params("id")
+	id := c.Params("slug")
 	var topic models.Topic
 	if err := config.DB.First(&topic, id).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Topic not found", nil)
@@ -124,14 +136,29 @@ func UpdateTopicAdmin(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusOK, "Topic updated", topic)
 }
 
-// GET ALL QUIZZES (Untuk Halaman Manajemen Kuis)
+// ========== QUIZZES WITH PAGINATION ==========
 func GetAllQuizzesAdmin(c *fiber.Ctx) error {
+	params := utils.GetPaginationParams(c)
+	
 	var quizzes []models.Quiz
-	// Preload Topic agar nama topik muncul
-	if err := config.DB.Preload("Topic").Order("created_at desc").Find(&quizzes).Error; err != nil {
+	var total int64
+
+	// Hitung total data
+	if err := config.DB.Model(&models.Quiz{}).Count(&total).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to count quizzes", nil)
+	}
+
+	// Ambil data dengan pagination
+	if err := config.DB.
+		Preload("Topic").
+		Order("created_at desc").
+		Limit(params.PageSize).
+		Offset(params.Offset).
+		Find(&quizzes).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch quizzes", nil)
 	}
-	return utils.SuccessResponse(c, fiber.StatusOK, "Quizzes retrieved", quizzes)
+
+	return utils.PaginatedSuccessResponse(c, fiber.StatusOK, "Quizzes retrieved", quizzes, total, params)
 }
 
 func PostQuizAdmin(c *fiber.Ctx) error {
@@ -203,14 +230,36 @@ func GetQuizAnalysisAdminById(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusOK, "Question analysis retrieved", analysis)
 }
 
+// ========== QUESTIONS WITH PAGINATION ==========
 func GetAllQuestionsAdmin(c *fiber.Ctx) error {
-
+	params := utils.GetPaginationParams(c)
+	
 	var questions []models.Question
+	var total int64
 
-	if err := config.DB.Preload("Quiz").Order("created_at desc").Find(&questions).Error; err != nil {
+	// Filter berdasarkan quiz_id jika ada
+	query := config.DB.Model(&models.Question{})
+	
+	if quizID := c.Query("quiz_id"); quizID != "" {
+		query = query.Where("quiz_id = ?", quizID)
+	}
+
+	// Hitung total data
+	if err := query.Count(&total).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to count questions", nil)
+	}
+
+	// Ambil data dengan pagination
+	if err := query.
+		Preload("Quiz").
+		Order("created_at desc").
+		Limit(params.PageSize).
+		Offset(params.Offset).
+		Find(&questions).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch questions", nil)
 	}
-	return utils.SuccessResponse(c, fiber.StatusOK, "Questions retrieved", questions)
+
+	return utils.PaginatedSuccessResponse(c, fiber.StatusOK, "Questions retrieved", questions, total, params)
 }
 
 func PostQuestionAdmin(c *fiber.Ctx) error {
@@ -223,8 +272,6 @@ func PostQuestionAdmin(c *fiber.Ctx) error {
 	}
 	return utils.SuccessResponse(c, fiber.StatusCreated, "Question created", question)
 }
-
-
 
 func UpdateQuestionAdmin(c *fiber.Ctx) error {
 	id := c.Params("id")
@@ -252,7 +299,6 @@ func DeleteQuestionAdmin(c *fiber.Ctx) error {
 func BulkUploadQuestions(c *fiber.Ctx) error {
 	quizID, _ := strconv.Atoi(c.FormValue("quiz_id"))
 
-	// Ambil file dari form-data
 	file, err := c.FormFile("file")
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "File required", nil)
@@ -261,7 +307,6 @@ func BulkUploadQuestions(c *fiber.Ctx) error {
 	f, _ := file.Open()
 	defer f.Close()
 
-	// Baca CSV
 	reader := csv.NewReader(f)
 	records, err := reader.ReadAll()
 	if err != nil {
@@ -283,6 +328,7 @@ func BulkUploadQuestions(c *fiber.Ctx) error {
 			QuestionText:  row[0],
 			Options:       pq.StringArray{row[1], row[2], row[3], row[4]},
 			CorrectAnswer: row[5],
+			Hint: row[6],
 		}
 		questions = append(questions, q)
 	}
