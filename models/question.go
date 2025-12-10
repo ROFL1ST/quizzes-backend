@@ -13,4 +13,16 @@ type Question struct {
 	Options       pq.StringArray `json:"options" gorm:"type:text[]"`
 	CorrectAnswer string         `json:"correct"`
 	Hint          string         `json:"hint"`
+	CorrectCount   int `json:"correct_count" gorm:"default:0"`
+	IncorrectCount int `json:"incorrect_count" gorm:"default:0"`
+}
+
+type QuestionAnalysis struct {
+	ID             uint   `json:"id"`
+	QuestionText   string `json:"question_text"`
+	CorrectCount   int    `json:"correct_count"`
+	IncorrectCount int    `json:"incorrect_count"`
+	TotalAttempts  int    `json:"total_attempts"`
+	Difficulty     string `json:"difficulty"`    
+	AccuracyRate   string `json:"accuracy_rate"`
 }

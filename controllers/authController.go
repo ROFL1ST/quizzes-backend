@@ -67,7 +67,21 @@ func LoginUser(c *fiber.Ctx) error {
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	t, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	now := time.Now()
+	if user.LastActivityDate != nil {
+		diff := now.Sub(*user.LastActivityDate).Hours()
 
+		if diff >= 24 && diff < 48 {
+			user.StreakCount++
+		} else if diff >= 48 {
+			user.StreakCount = 1
+		}
+	} else {
+		user.StreakCount = 1
+	}
+
+	user.LastActivityDate = &now
+	config.DB.Save(&user)
 	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{"token": t, "user": user})
 }
 

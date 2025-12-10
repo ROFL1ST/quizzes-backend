@@ -61,7 +61,11 @@ func ConnectDB() {
 		&models.Topic{},
 		&models.Quiz{},
 		&models.Question{},
+		&models.QuestionAnalysis{},
 		&models.History{},
+		&models.Achievement{},
+		&models.Activity{},
+		&models.Challenge{},
 	)
 
 	if err != nil {

@@ -30,6 +30,8 @@ func SetupRoutes(app *fiber.App) {
 
 	questionGroup := api.Group("/admin/questions", middleware.Protected(), middleware.AllowRoles("supervisor", "admin", "pengajar"))
 	questionGroup.Post("/", controllers.CreateQuestion)
+	questionGroup.Post("/bulk", controllers.BulkUploadQuestions)
+	questionGroup.Get("/analysis/:id", controllers.GetQuizAnalysis)
 
 	// User Routes
 	api.Get("/topics/:slug/quizzes", middleware.Protected(), controllers.GetQuizzesByTopicSlug)
@@ -41,17 +43,27 @@ func SetupRoutes(app *fiber.App) {
 	history.Get("/:id", controllers.GetHistoryByID)
 
 	friends := api.Group("/friends", middleware.Protected())
-	
-	friends.Get("/", controllers.GetMyFriends)           // Lihat daftar teman (accepted)
+
+	friends.Get("/", controllers.GetMyFriends)              // Lihat daftar teman (accepted)
 	friends.Get("/requests", controllers.GetFriendRequests) // Lihat request masuk
 	friends.Get("/sent", controllers.GetSentRequests)
-	
-	friends.Post("/request", controllers.RequestFriend)  // Minta berteman
-	friends.Post("/confirm", controllers.ConfirmFriend)  // Terima teman
-	friends.Post("/refuse", controllers.RefuseFriend)    // Tolak teman
-	
-	friends.Delete("/:id", controllers.RemoveFriend)     // Hapus teman
+
+	friends.Post("/request", controllers.RequestFriend) // Minta berteman
+	friends.Post("/confirm", controllers.ConfirmFriend) // Terima teman
+	friends.Post("/refuse", controllers.RefuseFriend)   // Tolak teman
+
+	friends.Delete("/:id", controllers.RemoveFriend) // Hapus teman
 	friends.Delete("/cancel/:id", controllers.CancelRequest)
 
 	api.Get("/leaderboard/:slug", middleware.Protected(), controllers.GetLeaderboardByTopic)
+
+	// Challenge Routes
+	challenges := api.Group("/challenges", middleware.Protected())
+	challenges.Post("/", controllers.CreateChallenge)
+	challenges.Get("/", controllers.GetMyChallenges)
+	challenges.Post("/:id/accept", controllers.AcceptChallenge)
+	challenges.Post("/:id/refuse", controllers.RejectChallenge)
+
+	// Activity Feed
+	api.Get("/feed", middleware.Protected(), controllers.GetFriendActivity)
 }

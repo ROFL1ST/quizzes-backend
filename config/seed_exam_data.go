@@ -6,7 +6,6 @@ import (
 )
 
 func SeedExamData() {
-	// 1. Cek apakah data sudah ada agar tidak duplikat
 	var count int64
 	DB.Model(&models.Topic{}).Where("slug = ?", "jarkom").Count(&count)
 	if count > 0 {
@@ -16,9 +15,6 @@ func SeedExamData() {
 
 	fmt.Println("Seeding Exam Data (IMK & JarKom)...")
 
-	// ==========================================
-	// 1. DATA JARINGAN KOMPUTER (JarKom)
-	// ==========================================
 	topicJarkom := models.Topic{Slug: "jarkom", Title: "Jaringan Komputer", Description: "TCP/IP, HTTP, DNS, dan Layer OSI"}
 	DB.Create(&topicJarkom)
 
@@ -137,9 +133,6 @@ func SeedExamData() {
 		DB.Create(&q)
 	}
 
-	// ==========================================
-	// 2. DATA IMK (Interaksi Manusia Komputer)
-	// ==========================================
 	topicIMK := models.Topic{Slug: "imk", Title: "Interaksi Manusia & Komputer", Description: "Usability, UX, dan Design Principle"}
 	DB.Create(&topicIMK)
 
