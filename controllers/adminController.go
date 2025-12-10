@@ -80,7 +80,7 @@ func GetAllUsers(c *fiber.Ctx) error {
 // ========== TOPICS WITH PAGINATION ==========
 func GetAllTopicsAdmin(c *fiber.Ctx) error {
 	params := utils.GetPaginationParams(c)
-	
+
 	var topics []models.Topic
 	var total int64
 
@@ -114,32 +114,48 @@ func PostTopicAdmin(c *fiber.Ctx) error {
 }
 
 func DeleteTopicAdmin(c *fiber.Ctx) error {
-	id := c.Params("id")
-	if err := config.DB.Delete(&models.Topic{}, id).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed delete topic", err.Error())
+	slug := c.Params("slug")
+
+	result := config.DB.Where("slug = ?", slug).Delete(&models.Topic{})
+
+	if result.Error != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed delete topic", result.Error.Error())
 	}
+
+	if result.RowsAffected == 0 {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Topic not found", nil)
+	}
+
 	return utils.SuccessResponse(c, fiber.StatusOK, "Topic deleted", nil)
 }
 
 func UpdateTopicAdmin(c *fiber.Ctx) error {
-	id := c.Params("slug")
+	slug := c.Params("slug")
 	var topic models.Topic
-	if err := config.DB.First(&topic, id).Error; err != nil {
+	if err := config.DB.Where("slug = ?", slug).First(&topic).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Topic not found", nil)
 	}
-	if err := c.BodyParser(&topic); err != nil {
+	var updateData models.Topic
+	if err := c.BodyParser(&updateData); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
 	}
+	topic.Title = updateData.Title
+	topic.Description = updateData.Description
+	if updateData.Slug != "" {
+		topic.Slug = updateData.Slug
+	}
+
 	if err := config.DB.Save(&topic).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed update topic", err.Error())
 	}
+
 	return utils.SuccessResponse(c, fiber.StatusOK, "Topic updated", topic)
 }
 
 // ========== QUIZZES WITH PAGINATION ==========
 func GetAllQuizzesAdmin(c *fiber.Ctx) error {
 	params := utils.GetPaginationParams(c)
-	
+
 	var quizzes []models.Quiz
 	var total int64
 
@@ -233,13 +249,13 @@ func GetQuizAnalysisAdminById(c *fiber.Ctx) error {
 // ========== QUESTIONS WITH PAGINATION ==========
 func GetAllQuestionsAdmin(c *fiber.Ctx) error {
 	params := utils.GetPaginationParams(c)
-	
+
 	var questions []models.Question
 	var total int64
 
 	// Filter berdasarkan quiz_id jika ada
 	query := config.DB.Model(&models.Question{})
-	
+
 	if quizID := c.Query("quiz_id"); quizID != "" {
 		query = query.Where("quiz_id = ?", quizID)
 	}
@@ -328,7 +344,7 @@ func BulkUploadQuestions(c *fiber.Ctx) error {
 			QuestionText:  row[0],
 			Options:       pq.StringArray{row[1], row[2], row[3], row[4]},
 			CorrectAnswer: row[5],
-			Hint: row[6],
+			Hint:          row[6],
 		}
 		questions = append(questions, q)
 	}
