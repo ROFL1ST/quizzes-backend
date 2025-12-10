@@ -1,0 +1,163 @@
+package controllers
+
+import (
+	"github.com/ROFL1ST/quizzes-backend/config"
+	"github.com/ROFL1ST/quizzes-backend/models"
+	"github.com/ROFL1ST/quizzes-backend/utils"
+	"github.com/gofiber/fiber/v2"
+	"golang.org/x/crypto/bcrypt"
+)
+
+// Struct untuk Response Profile yang rapi
+type ProfileStats struct {
+	TotalQuizzes    int64   `json:"total_quizzes"`
+	AverageScore    float64 `json:"average_score"`
+	TotalWins       int64   `json:"total_wins"`
+	FavoriteTopic   string  `json:"favorite_topic"`
+	CompletionRate  string  `json:"completion_rate"` // % Soal benar dari seluruh soal yang dijawab
+}
+
+// Struct untuk Radar Chart (Score per Topic)
+type TopicPerformance struct {
+	TopicName string  `json:"topic_name"`
+	AvgScore  float64 `json:"avg_score"`
+}
+
+func GetMyProfile(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(float64)
+
+	// 1. Ambil Data User Basic
+	var user models.User
+	if err := config.DB.First(&user, userID).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+	}
+
+	// 2. Hitung Statistik Dasar (Total Kuis & Rata-rata)
+	var totalQuizzes int64
+	var avgScore float64
+	config.DB.Model(&models.History{}).Where("user_id = ?", userID).Count(&totalQuizzes)
+	
+	// Gunakan COALESCE agar tidak error jika null (belum pernah main)
+	config.DB.Model(&models.History{}).Where("user_id = ?", userID).
+		Select("COALESCE(AVG(score), 0)").Scan(&avgScore)
+
+	// 3. Hitung Kemenangan (Dari tabel Challenge)
+	var totalWins int64
+	config.DB.Model(&models.Challenge{}).
+		Where("winner_id = ?", userID).Count(&totalWins)
+
+	// 4. Cari Topik Terfavorit (Paling sering dimainkan)
+	var favTopic struct {
+		Title string
+		Count int
+	}
+	config.DB.Table("histories").
+		Select("topics.title, count(histories.id) as count").
+		Joins("JOIN quizzes ON quizzes.id = histories.quiz_id").
+		Joins("JOIN topics ON topics.id = quizzes.topic_id").
+		Where("histories.user_id = ?", userID).
+		Group("topics.title").
+		Order("count desc").
+		Limit(1).
+		Scan(&favTopic)
+
+	if favTopic.Title == "" {
+		favTopic.Title = "-"
+	}
+
+	// 5. Analitik Per Topik (Untuk Radar Chart)
+	var topicPerfs []TopicPerformance
+	config.DB.Table("histories").
+		Select("topics.title as topic_name, AVG(histories.score) as avg_score").
+		Joins("JOIN quizzes ON quizzes.id = histories.quiz_id").
+		Joins("JOIN topics ON topics.id = quizzes.topic_id").
+		Where("histories.user_id = ?", userID).
+		Group("topics.title").
+		Scan(&topicPerfs)
+
+	// Susun Response
+	response := fiber.Map{
+		"user": user, // Password otomatis di-hide karena json:"-" di model
+		"stats": ProfileStats{
+			TotalQuizzes:  totalQuizzes,
+			AverageScore:  avgScore,
+			TotalWins:     totalWins,
+			FavoriteTopic: favTopic.Title,
+		},
+		"topic_performance": topicPerfs,
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Profile retrieved", response)
+}
+
+func UpdateProfile(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(float64)
+
+	var input struct {
+		Name     string `json:"name"`
+		Username string `json:"username"`
+		Password string `json:"password"` // Opsional
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
+	}
+
+	var user models.User
+	if err := config.DB.First(&user, userID).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+	}
+
+	// Update field jika dikirim
+	if input.Name != "" {
+		user.Name = input.Name
+	}
+	
+	// Cek unique username jika diganti
+	if input.Username != "" && input.Username != user.Username {
+		var check models.User
+		if err := config.DB.Where("username = ?", input.Username).First(&check).Error; err == nil {
+			return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username already taken", nil)
+		}
+		user.Username = input.Username
+	}
+
+	// Update password jika diisi (hash ulang)
+	if input.Password != "" {
+		hashed, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
+		user.Password = string(hashed)
+	}
+
+	if err := config.DB.Save(&user).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed update profile", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Profile updated", user)
+}
+
+// Fitur Tambahan: Lihat Profile Teman/Orang Lain
+func GetUserProfile(c *fiber.Ctx) error {
+	username := c.Params("username")
+	
+	var user models.User
+	if err := config.DB.Where("username = ?", username).First(&user).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+	}
+
+	// Untuk profil orang lain, kita hanya tampilkan statistik umum (tanpa detail privat)
+	var totalQuizzes int64
+	config.DB.Model(&models.History{}).Where("user_id = ?", user.ID).Count(&totalQuizzes)
+
+	stats := fiber.Map{
+		"xp":           user.XP,
+		"level":        user.Level,
+		"total_quizzes": totalQuizzes,
+		"joined_at":    user.CreatedAt,
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "User profile retrieved", fiber.Map{
+		"name":     user.Name,
+		"username": user.Username,
+		"stats":    stats,
+	})
+}
