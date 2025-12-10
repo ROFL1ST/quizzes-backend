@@ -18,18 +18,22 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/topics", controllers.GetAllTopics)
 
 	// Admin Routes
-	api.Get("/admin/analytics", middleware.Protected(), middleware.AllowRoles("supervisor", "admin"), controllers.GetDashboardAnalytics)
-	roleGroup := api.Group("/admin/roles", middleware.Protected(), middleware.AllowRoles("supervisor"))
+	adminGroup := api.Group("/admin", middleware.Protected())
+
+	adminGroup.Get("/analytics", middleware.AllowRoles("supervisor", "admin"), controllers.GetDashboardAnalytics)
+	adminGroup.Get("/users", controllers.GetAllUsers)
+	adminGroup.Get("/quizzes", controllers.GetAllQuizzesAdmin)
+	roleGroup := adminGroup.Group("/roles", middleware.AllowRoles("supervisor"))
 	roleGroup.Post("/", controllers.CreateRole)
 	roleGroup.Get("/", controllers.GetAllRoles)
 
-	topicGroup := api.Group("/admin/topics", middleware.Protected(), middleware.AllowRoles("supervisor", "admin"))
+	topicGroup := adminGroup.Group("/topics", middleware.AllowRoles("supervisor", "admin"))
 	topicGroup.Post("/", controllers.CreateTopic)
 
-	quizGroup := api.Group("/admin/quizzes", middleware.Protected(), middleware.AllowRoles("supervisor", "admin", "pengajar"))
+	quizGroup := adminGroup.Group("/quizzes", middleware.AllowRoles("supervisor", "admin", "pengajar"))
 	quizGroup.Post("/", controllers.CreateQuiz)
 
-	questionGroup := api.Group("/admin/questions", middleware.Protected(), middleware.AllowRoles("supervisor", "admin", "pengajar"))
+	questionGroup := adminGroup.Group("/questions", middleware.AllowRoles("supervisor", "admin", "pengajar"))
 	questionGroup.Post("/", controllers.CreateQuestion)
 	questionGroup.Post("/bulk", controllers.BulkUploadQuestions)
 	questionGroup.Get("/analysis/:id", controllers.GetQuizAnalysis)

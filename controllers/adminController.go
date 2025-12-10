@@ -155,3 +155,22 @@ func GetQuizAnalysis(c *fiber.Ctx) error {
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Question analysis retrieved", analysis)
 }
+
+func GetAllUsers(c *fiber.Ctx) error {
+	var users []models.User
+	// Ambil semua user, urutkan dari yang terbaru
+	if err := config.DB.Order("created_at desc").Find(&users).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch users", nil)
+	}
+	return utils.SuccessResponse(c, fiber.StatusOK, "Users retrieved", users)
+}
+
+// GET ALL QUIZZES (Untuk Halaman Manajemen Kuis)
+func GetAllQuizzesAdmin(c *fiber.Ctx) error {
+	var quizzes []models.Quiz
+	// Preload Topic agar nama topik muncul
+	if err := config.DB.Preload("Topic").Order("created_at desc").Find(&quizzes).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch quizzes", nil)
+	}
+	return utils.SuccessResponse(c, fiber.StatusOK, "Quizzes retrieved", quizzes)
+}
