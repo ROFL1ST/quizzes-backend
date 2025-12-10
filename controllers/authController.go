@@ -141,3 +141,62 @@ func LoginAdmin(c *fiber.Ctx) error {
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{"token": t, "user": admin, "role": admin.Role.Name})
 }
+
+func AuthMe(c *fiber.Ctx) error {
+	userIDLocals := c.Locals("user_id")
+	role := c.Locals("role").(string)
+	userID := uint(userIDLocals.(float64))
+	if role == "user" {
+
+		var user models.User
+
+		if err := config.DB.First(&user, userID).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+		}
+
+		now := time.Now()
+		user.LastActivityDate = &now
+		config.DB.Save(&user)
+
+		claims := jwt.MapClaims{
+			"user_id": user.ID,
+			"role":    "user",
+			"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		}
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		t, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+
+		return utils.SuccessResponse(c, fiber.StatusOK, "User session refreshed", fiber.Map{
+			"token": t,
+			"user":  user,
+			"role":  "user",
+		})
+
+	} else {
+
+		var admin models.Admin
+		// Preload Role untuk memastikan data role admin terbaru
+		if err := config.DB.Preload("Role").First(&admin, userID).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusNotFound, "Admin not found", nil)
+		}
+
+		if admin.Role.Name != role {
+
+			role = admin.Role.Name
+		}
+
+		claims := jwt.MapClaims{
+			"user_id": admin.ID,
+			"role":    role,
+			"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		}
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		t, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+
+		return utils.SuccessResponse(c, fiber.StatusOK, "Admin session refreshed", fiber.Map{
+			"token": t,
+			"user":  admin,
+			"role":  role,
+		})
+	}
+}
