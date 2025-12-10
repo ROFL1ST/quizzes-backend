@@ -1,11 +1,10 @@
 package utils
 
 import (
-	"time"
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
+	"time"
 )
-
 
 func UnlockAchievement(userID uint, achievementID uint) {
 
@@ -18,7 +17,6 @@ func UnlockAchievement(userID uint, achievementID uint) {
 		return
 	}
 
-
 	ua := models.UserAchievement{
 		UserID:        userID,
 		AchievementID: achievementID,
@@ -26,10 +24,9 @@ func UnlockAchievement(userID uint, achievementID uint) {
 	}
 	config.DB.Create(&ua)
 
-
 	var ach models.Achievement
 	config.DB.First(&ach, achievementID)
-	
+
 	activity := models.Activity{
 		UserID:      userID,
 		Type:        "achievement",
@@ -37,7 +34,6 @@ func UnlockAchievement(userID uint, achievementID uint) {
 	}
 	config.DB.Create(&activity)
 }
-
 
 func CheckQuizAchievements(userID uint, score int) {
 
@@ -53,13 +49,22 @@ func CheckQuizAchievements(userID uint, score int) {
 		UnlockAchievement(userID, 3)
 	}
 
-    var user models.User
-    config.DB.First(&user, userID)
-    if user.Level >= 5 {
-        UnlockAchievement(userID, 5) 
-    }
-    
-    if user.StreakCount >= 3 {
-        UnlockAchievement(userID, 6) 
-    }
+	var user models.User
+
+	config.DB.First(&user, userID)
+
+	if user.Level >= 5 {
+		UnlockAchievement(userID, 5)
+	}
+
+	if user.StreakCount >= 3 {
+		UnlockAchievement(userID, 6)
+	}
+
+	var totalWins int64
+	config.DB.Model(&models.Challenge{}).Where("winner_id = ?", userID).Count(&totalWins)
+
+	if totalWins >= 1 {
+		UnlockAchievement(userID, 4)
+	}
 }
