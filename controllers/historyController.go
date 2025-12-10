@@ -20,7 +20,6 @@ func SaveHistory(c *fiber.Ctx) error {
 	if err := config.DB.Create(&history).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed save history", err.Error())
 	}
-	go utils.CheckQuizAchievements(history.UserID, history.Score)
 	go func(uid uint, qID uint, score int) {
 		var challenge models.Challenge
 		err := config.DB.Where(
@@ -110,6 +109,7 @@ func SaveHistory(c *fiber.Ctx) error {
 		}
 		config.DB.Create(&feed)
 	}
+	go utils.CheckQuizAchievements(history.UserID, history.Score)
 
 	return utils.SuccessResponse(c, fiber.StatusCreated, "History saved", history)
 }
