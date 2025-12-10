@@ -91,6 +91,7 @@ func SetupRoutes(app *fiber.App) {
 	// User Profile & Settings
 	userGroup := api.Group("/users", middleware.Protected())
     userGroup.Get("/me", controllers.GetMyProfile)        // Lihat profil & statistik sendiri
+	userGroup.Get("/achievements", controllers.GetMyAchievements)
     userGroup.Put("/me", controllers.UpdateProfile)       // Ganti nama/password
     userGroup.Get("/:username", controllers.GetUserProfile)
 }
