@@ -31,19 +31,27 @@ func CreateChallenge(c *fiber.Ctx) error {
 	}
 
 	config.DB.Create(&challenge)
+
+	utils.SendNotification(opponent.ID, "⚔️ Kamu ditantang duel kuis!", "/challenges", "warning")
 	return utils.SuccessResponse(c, fiber.StatusCreated, "Challenge sent", challenge)
 }
 
 func GetMyChallenges(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
+
 	var challenges []models.Challenge
-	config.DB.Preload("Quiz").
+
+	config.DB.
+		Preload("Quiz").
 		Preload("Challenger").
 		Preload("Opponent").
 		Where("(challenger_id = ? OR opponent_id = ?)", userID, userID).
+		Order("created_at DESC").
 		Find(&challenges)
+
 	return utils.SuccessResponse(c, fiber.StatusOK, "Challenges retrieved", challenges)
 }
+
 
 func AcceptChallenge(c *fiber.Ctx) error {
 	id := c.Params("id")

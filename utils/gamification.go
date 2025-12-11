@@ -33,6 +33,8 @@ func UnlockAchievement(userID uint, achievementID uint) {
 		Description: "Membuka Achievement: " + ach.Name,
 	}
 	config.DB.Create(&activity)
+
+	SendNotification(userID, "🏆 Achievement Unlocked: "+ach.Name, "/profile", "success")
 }
 
 func CheckQuizAchievements(userID uint, score int) {

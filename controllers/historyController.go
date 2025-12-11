@@ -109,6 +109,7 @@ func SaveHistory(c *fiber.Ctx) error {
 				Description: "Naik ke Level " + strconv.Itoa(newLevel),
 			}
 			config.DB.Create(&activity)
+			utils.SendNotification(user.ID, "⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(newLevel), "/profile", "success")
 		}
 		config.DB.Save(&user)
 
