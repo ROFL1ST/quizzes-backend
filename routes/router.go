@@ -17,6 +17,7 @@ func SetupRoutes(app *fiber.App) {
 
 	api.Get("/topics", controllers.GetAllTopics)
 	api.Get("/auth/me", middleware.Protected(), controllers.AuthMe)
+	api.Get("/notifications/stream", middleware.Protected(), controllers.StreamNotifications)
 	// Admin Routes
 	adminGroup := api.Group("/admin", middleware.Protected())
 

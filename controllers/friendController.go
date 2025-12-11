@@ -4,13 +4,12 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
-
+	
 	"github.com/gofiber/fiber/v2"
 )
 
-// 1. Request Friend (Mengirim permintaan berteman)
 func RequestFriend(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(float64) // ID pengirim (Saya)
+	userID := c.Locals("user_id").(float64) 
 	var input struct {
 		Username string `json:"username"`
 	}
@@ -19,18 +18,17 @@ func RequestFriend(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
 	}
 
-	// Cari user yang ingin ditambahkan
 	var friend models.User
 	if err := config.DB.Where("username = ?", input.Username).First(&friend).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 	}
 
-	// Cek tidak boleh add diri sendiri
+
 	if friend.ID == uint(userID) {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Cannot add yourself", nil)
 	}
 
-	// Cek apakah hubungan sudah ada (baik pending maupun accepted, bolak-balik)
+
 	var check models.Friendship
 	err := config.DB.Where("(user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)", 
 		userID, friend.ID, friend.ID, userID).First(&check).Error
@@ -42,7 +40,7 @@ func RequestFriend(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Request already sent/pending", nil)
 	}
 
-	// Buat request baru
+
 	friendship := models.Friendship{
 		UserID:   uint(userID),
 		FriendID: friend.ID,
@@ -52,15 +50,15 @@ func RequestFriend(c *fiber.Ctx) error {
 	if err := config.DB.Create(&friendship).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to send request", err.Error())
 	}
-
+	utils.SendNotification(friend.ID, "👋 Permintaan teman baru dari "+input.Username, "/friends", "info")
 	return utils.SuccessResponse(c, fiber.StatusCreated, "Friend request sent", nil)
 }
 
-// 2. Confirm Friend (Menerima permintaan)
+
 func ConfirmFriend(c *fiber.Ctx) error {
 	myID := c.Locals("user_id").(float64)
 	var input struct {
-		RequesterID uint `json:"requester_id"` // ID orang yang meminta berteman
+		RequesterID uint `json:"requester_id"`
 	}
 
 	if err := c.BodyParser(&input); err != nil {

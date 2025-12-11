@@ -10,12 +10,21 @@ import (
 
 func Protected() fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		var tokenString string
+
 		authHeader := c.Get("Authorization")
-		if authHeader == "" {
+		if authHeader != "" {
+			tokenString = strings.Replace(authHeader, "Bearer ", "", 1)
+		}
+
+		if tokenString == "" {
+			tokenString = c.Query("token")
+		}
+
+		if tokenString == "" {
 			return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
 		}
 
-		tokenString := strings.Replace(authHeader, "Bearer ", "", 1)
 		token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
 			return []byte(os.Getenv("JWT_SECRET")), nil
 		})
