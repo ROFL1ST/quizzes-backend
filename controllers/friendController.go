@@ -4,12 +4,12 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
-	
+
 	"github.com/gofiber/fiber/v2"
 )
 
 func RequestFriend(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(float64) 
+	userID := c.Locals("user_id").(float64)
 	var input struct {
 		Username string `json:"username"`
 	}
@@ -23,14 +23,12 @@ func RequestFriend(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 	}
 
-
 	if friend.ID == uint(userID) {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Cannot add yourself", nil)
 	}
 
-
 	var check models.Friendship
-	err := config.DB.Where("(user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)", 
+	err := config.DB.Where("(user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
 		userID, friend.ID, friend.ID, userID).First(&check).Error
 
 	if err == nil {
@@ -39,7 +37,6 @@ func RequestFriend(c *fiber.Ctx) error {
 		}
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Request already sent/pending", nil)
 	}
-
 
 	friendship := models.Friendship{
 		UserID:   uint(userID),
@@ -50,10 +47,19 @@ func RequestFriend(c *fiber.Ctx) error {
 	if err := config.DB.Create(&friendship).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to send request", err.Error())
 	}
+
+	var sentCount int64
+	config.DB.Model(&models.Friendship{}).
+		Where("user_id = ?", userID).
+		Count(&sentCount)
+
+	if sentCount >= 5 {
+		utils.UnlockAchievement(uint(userID), 16)
+	}
+
 	utils.SendNotification(friend.ID, "👋 Permintaan teman baru dari "+input.Username, "/friends", "info")
 	return utils.SuccessResponse(c, fiber.StatusCreated, "Friend request sent", nil)
 }
-
 
 func ConfirmFriend(c *fiber.Ctx) error {
 	myID := c.Locals("user_id").(float64)
@@ -66,14 +72,21 @@ func ConfirmFriend(c *fiber.Ctx) error {
 	}
 
 	var friendship models.Friendship
-	// Cari request dimana SAYA adalah FriendID (penerima) dan statusnya pending
 	if err := config.DB.Where("user_id = ? AND friend_id = ? AND status = 'pending'", input.RequesterID, myID).First(&friendship).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Friend request not found", nil)
 	}
 
-	// Update status jadi accepted
 	friendship.Status = "accepted"
 	config.DB.Save(&friendship)
+
+	var friendCount int64
+	config.DB.Model(&models.Friendship{}).
+		Where("(user_id = ? OR friend_id = ?) AND status = 'accepted'", myID, myID).
+		Count(&friendCount)
+
+	if friendCount >= 3 {
+		utils.UnlockAchievement(uint(myID), 7)
+	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Friend request accepted", nil)
 }
@@ -91,7 +104,7 @@ func RefuseFriend(c *fiber.Ctx) error {
 
 	// Hapus request dimana SAYA adalah penerima
 	result := config.DB.Where("user_id = ? AND friend_id = ? AND status = 'pending'", input.RequesterID, myID).Delete(&models.Friendship{})
-	
+
 	if result.RowsAffected == 0 {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Request not found", nil)
 	}
@@ -103,7 +116,7 @@ func RefuseFriend(c *fiber.Ctx) error {
 func GetMyFriends(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 	var friendships []models.Friendship
-	
+
 	// Ambil data dimana user terlibat (baik sebagai pengirim atau penerima) DAN status accepted
 	config.DB.Preload("Friend").Preload("User").
 		Where("(user_id = ? OR friend_id = ?) AND status = 'accepted'", userID, userID).
@@ -115,7 +128,7 @@ func GetMyFriends(c *fiber.Ctx) error {
 		if f.UserID == uint(userID) {
 			friendList = append(friendList, f.Friend) // Temannya adalah 'Friend'
 		} else {
-			friendList = append(friendList, f.User)   // Temannya adalah 'User' (requester)
+			friendList = append(friendList, f.User) // Temannya adalah 'User' (requester)
 		}
 	}
 
@@ -129,8 +142,8 @@ func GetFriendRequests(c *fiber.Ctx) error {
 
 	// Cari yang FriendID-nya SAYA dan status pending
 	config.DB.Preload("User"). // Load data si pengirim (Requester)
-		Where("friend_id = ? AND status = 'pending'", myID).
-		Find(&requests)
+					Where("friend_id = ? AND status = 'pending'", myID).
+					Find(&requests)
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Pending requests", requests)
 }
@@ -182,4 +195,4 @@ func CancelRequest(c *fiber.Ctx) error {
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Request cancelled", nil)
-}	
+}
