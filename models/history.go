@@ -13,5 +13,6 @@ type History struct {
 	QuizTitle string         `json:"quiz_title"`
 	Score     int            `json:"score"`
 	TotalSoal int            `json:"total_soal"`
+	TimeTaken int            `json:"time_taken"`
 	Snapshot  datatypes.JSON `json:"snapshot"`
 }
