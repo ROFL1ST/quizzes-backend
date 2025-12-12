@@ -19,56 +19,74 @@ func SaveHistory(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid data", err.Error())
 	}
 
+	
+
+	// Simpan history
 	history.UserID = uint(userID)
 	if err := config.DB.Create(&history).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed save history", err.Error())
 	}
 
 	var wg sync.WaitGroup
-
-	// Update Logika Challenge (Support Battle Royale)
 	wg.Add(1)
-	go func(uid uint, qID uint, score int, timeTaken int) {
-		defer wg.Done()
+    go func(uid uint, qID uint, score int, timeTaken int) {
+        defer wg.Done()
 
-		// 1. Cari apakah User ini tergabung dalam Challenge aktif untuk kuis ini
-		var participant models.ChallengeParticipant
-		err := config.DB.Joins("JOIN challenges ON challenges.id = challenge_participants.challenge_id").
-			Where("challenge_participants.user_id = ? AND challenges.quiz_id = ? AND challenges.status = 'active'", uid, qID).
-			First(&participant).Error
+        var participant models.ChallengeParticipant
 
-		if err == nil {
-			// Update skor peserta
-			participant.Score = score
-			participant.TimeTaken = timeTaken
-			config.DB.Save(&participant)
+        // 1. Cari Partisipan (Query tetap sama supaya aman dari ambiguous ID)
+        err := config.DB.Table("challenge_participants").
+            Joins("JOIN challenges ON challenges.id = challenge_participants.challenge_id").
+            Where("challenge_participants.user_id = ? AND challenges.quiz_id = ? AND challenges.status = 'active'", uid, qID).
+            Order("challenges.created_at DESC"). // <--- TAMBAHAN KECIL TAPI PENTING
+            Select("challenge_participants.*").
+            First(&participant).Error
 
-			// Cek apakah semua peserta sudah selesai?
-			var challenge models.Challenge
-			config.DB.Preload("Participants").First(&challenge, participant.ChallengeID)
+        if err == nil {
+            // --- UPDATE 1: Set Flag IsFinished ---
+            participant.Score = score
+            participant.TimeTaken = timeTaken
+            participant.IsFinished = true // <--- PENTING: Tandai sudah selesai
+            
+            // Simpan perubahan participant
+            config.DB.Save(&participant)
 
-			allFinished := true
-			for _, p := range challenge.Participants {
-				if p.Score == -1 { // Masih ada yang belum selesai
-					allFinished = false
-					break
-				}
-			}
+            // 2. Cek apakah Challenge Selesai (Semua peserta 'accepted' sudah 'finished')
+            var challenge models.Challenge
+            // Preload participants untuk cek status teman mabar
+            if err := config.DB.Preload("Participants").First(&challenge, participant.ChallengeID).Error; err == nil {
+                
+                allFinished := true
+                for _, p := range challenge.Participants {
+                    // Hanya cek user yang statusnya 'accepted'.
+                    // User 'pending' atau 'rejected' tidak dihitung.
+                    if p.Status == "accepted" {
+                        // Jika ada SATU saja yang belum finish, maka game belum over.
+                        if !p.IsFinished { 
+                            allFinished = false
+                            break
+                        }
+                    }
+                }
 
-			if allFinished {
-				challenge.Status = "finished"
-				config.DB.Save(&challenge)
-				// Disini bisa tambahkan notifikasi ke semua peserta siapa pemenangnya
-			}
-		}
-	}(uint(userID), history.QuizID, history.Score, history.TimeTaken)
-
-	// ... (Logika XP dan Achievement tetap sama seperti file asli) ...
-	// Note: Pastikan snapshot processing tetap berjalan
+                // --- UPDATE 2: Jika semua selesai, tutup challenge ---
+                if allFinished {
+                    challenge.Status = "finished"
+                    config.DB.Save(&challenge)
+                    
+                    // Opsional: Logic penentuan pemenang bisa ditaruh disini
+                    // utils.DetermineWinner(challenge.ID) 
+                }
+            }
+        }
+    }(uint(userID), history.QuizID, history.Score, history.TimeTaken)
+	// ----------------------------
+	// UPDATE QUESTION SNAPSHOT
+	// ----------------------------
 	go func(quizID uint, snapshotJSON []byte) {
-		// ... (Kode snapshot analysis dari file asli tetap dipakai) ...
 		var questions []models.Question
 		config.DB.Where("quiz_id = ?", quizID).Find(&questions)
+
 		keyMap := make(map[uint]string)
 		for _, q := range questions {
 			keyMap[q.ID] = q.CorrectAnswer
@@ -82,14 +100,18 @@ func SaveHistory(c *fiber.Ctx) error {
 			if correctAnswer, exists := keyMap[uint(qID)]; exists {
 				if answer == correctAnswer {
 					config.DB.Model(&models.Question{}).Where("id = ?", qID).
-						UpdateColumn("correct_count", gorm.Expr("correct_count + ?", 1))
+						UpdateColumn("correct_count", gorm.Expr("correct_count + 1"))
 				} else {
 					config.DB.Model(&models.Question{}).Where("id = ?", qID).
-						UpdateColumn("incorrect_count", gorm.Expr("incorrect_count + ?", 1))
+						UpdateColumn("incorrect_count", gorm.Expr("incorrect_count + 1"))
 				}
 			}
 		}
 	}(history.QuizID, history.Snapshot)
+
+	// ----------------------------
+	// UPDATE XP USER
+	// ----------------------------
 	var user models.User
 	if err := config.DB.First(&user, uint(userID)).Error; err == nil {
 		xpGained := history.Score
@@ -98,17 +120,28 @@ func SaveHistory(c *fiber.Ctx) error {
 
 		if newLevel > user.Level {
 			user.Level = newLevel
+
 			activity := models.Activity{
 				UserID:      user.ID,
 				Type:        "level_up",
 				Description: "Naik ke Level " + strconv.Itoa(newLevel),
 			}
 			config.DB.Create(&activity)
-			utils.SendNotification(user.ID, "⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(newLevel), "/profile", "success")
+
+			utils.SendNotification(
+				user.ID,
+				"⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(newLevel),
+				"/profile",
+				"success",
+			)
 		}
+
 		config.DB.Save(&user)
 	}
 
+	// ----------------------------
+	// CEK ACHIEVEMENT SETELAH SELESAI
+	// ----------------------------
 	go func() {
 		wg.Wait()
 		utils.CheckQuizAchievements(history.UserID, history.Score)
