@@ -7,7 +7,6 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/utils"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
-	"math"
 	"strconv"
 	"sync"
 )
@@ -91,20 +90,19 @@ func SaveHistory(c *fiber.Ctx) error {
 		xpGained := history.Score
 		user.XP += int64(xpGained)
 
-		const difficultyFactor = 100.0
+		// 2. Hitung Level Baru (Dinamis dari DB)
+		newLevel := utils.CalculateLevel(user.XP)
 
-		calculatedLevel := int(math.Sqrt(float64(user.XP)/difficultyFactor)) + 1
-
-		if calculatedLevel > user.Level {
-			user.Level = calculatedLevel
+		if newLevel > user.Level {
+			user.Level = newLevel
 
 			activity := models.Activity{
 				UserID:      user.ID,
 				Type:        "level_up",
-				Description: "Naik ke Level " + strconv.Itoa(calculatedLevel),
+				Description: "Naik ke Level " + strconv.Itoa(newLevel),
 			}
 			config.DB.Create(&activity)
-			utils.SendNotification(user.ID, "⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(calculatedLevel), "/profile", "success")
+			utils.SendNotification(user.ID, "⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(newLevel), "/profile", "success")
 		}
 		config.DB.Save(&user)
 

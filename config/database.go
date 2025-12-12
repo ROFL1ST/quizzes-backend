@@ -67,6 +67,7 @@ func ConnectDB() {
 		&models.Activity{},
 		&models.Challenge{},
 		&models.UserAchievement{},
+		&models.SystemConfig{},
 	)
 
 	if err != nil {

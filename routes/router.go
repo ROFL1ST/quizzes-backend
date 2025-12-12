@@ -23,6 +23,10 @@ func SetupRoutes(app *fiber.App) {
 
 	adminGroup.Get("/analytics", middleware.AllowRoles("supervisor", "admin"), controllers.GetDashboardAnalytics)
 
+	// config
+	configGroup := adminGroup.Group("/config", middleware.AllowRoles("supervisor"))
+	configGroup.Get("/leveling", controllers.GetLevelingConfig)
+	configGroup.Put("/leveling", controllers.UpdateLevelingConfig)
 	// topic admin routes
 	topicAdmin := adminGroup.Group("/topics", middleware.AllowRoles("supervisor", "admin"))
 	topicAdmin.Get("/", controllers.GetAllTopicsAdmin)
