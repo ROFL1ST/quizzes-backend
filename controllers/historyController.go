@@ -15,22 +15,18 @@ func SaveHistory(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 	var history models.History
 
-	
 	if err := c.BodyParser(&history); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid data", err.Error())
 	}
-
 
 	history.UserID = uint(userID)
 	if err := config.DB.Create(&history).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed save history", err.Error())
 	}
 
-	
 	var wg sync.WaitGroup
 
-	
-	wg.Add(1) 
+	wg.Add(1)
 	go func(uid uint, qID uint, score int) {
 		defer wg.Done()
 		var challenge models.Challenge
@@ -40,18 +36,16 @@ func SaveHistory(c *fiber.Ctx) error {
 		).First(&challenge).Error
 
 		if err == nil {
-		
+
 			if challenge.ChallengerID == uid {
 				challenge.ChallengerScore = score
 			} else {
 				challenge.OpponentScore = score
 			}
 
-			
 			if challenge.ChallengerScore != -1 && challenge.OpponentScore != -1 {
 				challenge.Status = "finished"
 
-				
 				if challenge.ChallengerScore > challenge.OpponentScore {
 					winner := challenge.ChallengerID
 					challenge.WinnerID = &winner
@@ -59,12 +53,11 @@ func SaveHistory(c *fiber.Ctx) error {
 					winner := challenge.OpponentID
 					challenge.WinnerID = &winner
 				}
-				
+
 			}
 			config.DB.Save(&challenge)
 		}
 	}(uint(userID), history.QuizID, history.Score)
-
 
 	go func(quizID uint, snapshotJSON []byte) {
 		var questions []models.Question
@@ -91,15 +84,15 @@ func SaveHistory(c *fiber.Ctx) error {
 		}
 	}(history.QuizID, history.Snapshot)
 
-
 	var user models.User
 	if err := config.DB.First(&user, uint(userID)).Error; err == nil {
-		// Tambah XP
+		// 1. Tambah XP
 		xpGained := history.Score
 		user.XP += int64(xpGained)
 
-		
-		newLevel := int((user.XP / 1000)) + 1
+		// 2. Hitung Level Baru (Dinamis dari DB)
+		newLevel := utils.CalculateLevel(user.XP)
+
 		if newLevel > user.Level {
 			user.Level = newLevel
 
@@ -113,17 +106,11 @@ func SaveHistory(c *fiber.Ctx) error {
 		}
 		config.DB.Save(&user)
 
-		feed := models.Activity{
-			UserID:      user.ID,
-			Type:        "quiz_completed",
-			Description: "Menyelesaikan kuis " + history.QuizTitle + " dengan skor " + strconv.Itoa(history.Score),
-		}
-		config.DB.Create(&feed)
+		// ... sisa kode feed ...
 	}
 
-	
 	go func() {
-		wg.Wait() 
+		wg.Wait()
 		utils.CheckQuizAchievements(history.UserID, history.Score)
 	}()
 

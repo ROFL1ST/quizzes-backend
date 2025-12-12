@@ -6,15 +6,16 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/utils"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
+	"math"
 )
 
 // Struct untuk Response Profile yang rapi
 type ProfileStats struct {
-	TotalQuizzes    int64   `json:"total_quizzes"`
-	AverageScore    float64 `json:"average_score"`
-	TotalWins       int64   `json:"total_wins"`
-	FavoriteTopic   string  `json:"favorite_topic"`
-	CompletionRate  string  `json:"completion_rate"` // % Soal benar dari seluruh soal yang dijawab
+	TotalQuizzes   int64   `json:"total_quizzes"`
+	AverageScore   float64 `json:"average_score"`
+	TotalWins      int64   `json:"total_wins"`
+	FavoriteTopic  string  `json:"favorite_topic"`
+	CompletionRate string  `json:"completion_rate"` // % Soal benar dari seluruh soal yang dijawab
 }
 
 // Struct untuk Radar Chart (Score per Topic)
@@ -26,22 +27,20 @@ type TopicPerformance struct {
 func GetMyProfile(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 
-	// 1. Ambil Data User Basic
 	var user models.User
 	if err := config.DB.First(&user, userID).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 	}
 
-	// 2. Hitung Statistik Dasar (Total Kuis & Rata-rata)
 	var totalQuizzes int64
 	var avgScore float64
 	config.DB.Model(&models.History{}).Where("user_id = ?", userID).Count(&totalQuizzes)
-	
-	// Gunakan COALESCE agar tidak error jika null (belum pernah main)
+
+
 	config.DB.Model(&models.History{}).Where("user_id = ?", userID).
 		Select("COALESCE(AVG(score), 0)").Scan(&avgScore)
 
-	// 3. Hitung Kemenangan (Dari tabel Challenge)
+
 	var totalWins int64
 	config.DB.Model(&models.Challenge{}).
 		Where("winner_id = ?", userID).Count(&totalWins)
@@ -75,9 +74,44 @@ func GetMyProfile(c *fiber.Ctx) error {
 		Group("topics.title").
 		Scan(&topicPerfs)
 
+	calculatedLevel := utils.CalculateLevel(user.XP)
+
+	if calculatedLevel > user.Level {
+		user.Level = calculatedLevel
+		config.DB.Save(&user) // Simpan perbaikan ke database
+	}
+	currentLevel := user.Level
+	nextLevel := currentLevel + 1
+
+	// Hitung batas bawah level saat ini dan batas level selanjutnya
+	currentLevelBaseXP := utils.CalculateMinXPForLevel(currentLevel)
+	nextLevelThreshold := utils.CalculateMinXPForLevel(nextLevel)
+
+	levelProgress := fiber.Map{
+		"current_level":    currentLevel,
+		"current_xp":       user.XP,
+		"level_base_xp":    currentLevelBaseXP,
+		"next_level_xp":    nextLevelThreshold,
+		"xp_needed":        nextLevelThreshold - user.XP,
+		"progress_percent": 0,
+	}
+
+	rangeXP := nextLevelThreshold - currentLevelBaseXP
+	if rangeXP > 0 {
+		progress := float64(user.XP-currentLevelBaseXP) / float64(rangeXP) * 100
+
+
+		if progress > 100 {
+			progress = 100
+		}
+
+		levelProgress["progress_percent"] = math.Round(progress*10) / 10
+	} else {
+		levelProgress["progress_percent"] = 100
+	}
 	// Susun Response
 	response := fiber.Map{
-		"user": user, // Password otomatis di-hide karena json:"-" di model
+		"user": user,
 		"stats": ProfileStats{
 			TotalQuizzes:  totalQuizzes,
 			AverageScore:  avgScore,
@@ -85,6 +119,7 @@ func GetMyProfile(c *fiber.Ctx) error {
 			FavoriteTopic: favTopic.Title,
 		},
 		"topic_performance": topicPerfs,
+		"level_progress":    levelProgress,
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Profile retrieved", response)
@@ -112,7 +147,7 @@ func UpdateProfile(c *fiber.Ctx) error {
 	if input.Name != "" {
 		user.Name = input.Name
 	}
-	
+
 	// Cek unique username jika diganti
 	if input.Username != "" && input.Username != user.Username {
 		var check models.User
@@ -138,7 +173,7 @@ func UpdateProfile(c *fiber.Ctx) error {
 // Fitur Tambahan: Lihat Profile Teman/Orang Lain
 func GetUserProfile(c *fiber.Ctx) error {
 	username := c.Params("username")
-	
+
 	var user models.User
 	if err := config.DB.Where("username = ?", username).First(&user).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
@@ -149,10 +184,10 @@ func GetUserProfile(c *fiber.Ctx) error {
 	config.DB.Model(&models.History{}).Where("user_id = ?", user.ID).Count(&totalQuizzes)
 
 	stats := fiber.Map{
-		"xp":           user.XP,
-		"level":        user.Level,
+		"xp":            user.XP,
+		"level":         user.Level,
 		"total_quizzes": totalQuizzes,
-		"joined_at":    user.CreatedAt,
+		"joined_at":     user.CreatedAt,
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "User profile retrieved", fiber.Map{

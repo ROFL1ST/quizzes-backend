@@ -7,6 +7,13 @@ import (
 )
 
 func SeedDatabase() {
+
+	var configCount int64
+	DB.Model(&models.SystemConfig{}).Count(&configCount)
+	if configCount == 0 {
+		DB.Create(&models.SystemConfig{Key: "leveling_factor", Value: "100"})
+	}
+	fmt.Println("System configuration seeded!")
 	var count int64
 	DB.Model(&models.Role{}).Count(&count)
 
@@ -40,5 +47,6 @@ func SeedDatabase() {
 
 	DB.Create(&superAdmin)
 	fmt.Println("Seeding done! User: superadmin | Pass: 123456")
-}
 
+	
+}

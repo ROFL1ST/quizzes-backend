@@ -4,6 +4,8 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"time"
+	"strconv"
+	"math"
 )
 
 func UnlockAchievement(userID uint, achievementID uint) {
@@ -117,4 +119,35 @@ func CheckQuizAchievements(userID uint, score int) {
 	if totalWins >= 5 {
 		UnlockAchievement(userID, 9)
 	}
+}
+
+
+func GetLevelingFactor() float64 {
+    var conf models.SystemConfig
+    config.DB.Where("key = ?", "leveling_factor").Find(&conf)
+    
+    if conf.Value == "" {
+        return 100.0
+    }
+    
+    val, err := strconv.ParseFloat(conf.Value, 64)
+    if err != nil {
+        return 100.0
+    }
+    return val
+}
+
+
+func CalculateLevel(xp int64) int {
+    factor := GetLevelingFactor()
+    return int(math.Sqrt(float64(xp)/factor)) + 1
+}
+
+
+func CalculateMinXPForLevel(level int) int64 {
+    if level <= 1 {
+        return 0
+    }
+    factor := GetLevelingFactor()
+    return int64(factor * math.Pow(float64(level-1), 2))
 }

@@ -31,6 +31,41 @@ type QuestionAnalysis struct {
 	AccuracyRate   string `json:"accuracy_rate"`
 }
 
+type ConfigInput struct {
+    Value string `json:"value"`
+}
+
+func GetLevelingConfig(c *fiber.Ctx) error {
+    var conf models.SystemConfig
+    if err := config.DB.Where("key = ?", "leveling_factor").First(&conf).Error; err != nil {
+        // Jika belum ada, return default
+        return utils.SuccessResponse(c, fiber.StatusOK, "Config retrieved", fiber.Map{"value": "100"})
+    }
+    return utils.SuccessResponse(c, fiber.StatusOK, "Config retrieved", conf)
+}
+
+func UpdateLevelingConfig(c *fiber.Ctx) error {
+    var input ConfigInput
+    if err := c.BodyParser(&input); err != nil {
+        return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", nil)
+    }
+
+    // Validasi angka
+    if _, err := strconv.ParseFloat(input.Value, 64); err != nil {
+        return utils.ErrorResponse(c, fiber.StatusBadRequest, "Value must be a number", nil)
+    }
+
+    var conf models.SystemConfig
+    // Upsert (Update jika ada, Create jika tidak)
+    config.DB.Where("key = ?", "leveling_factor").Assign(models.SystemConfig{Value: input.Value}).FirstOrCreate(&conf)
+    
+    // Simpan nilai baru
+    conf.Value = input.Value
+    config.DB.Save(&conf)
+
+    return utils.SuccessResponse(c, fiber.StatusOK, "Leveling difficulty updated", conf)
+}
+
 func GetDashboardAnalytics(c *fiber.Ctx) error {
 	var totalUsers, totalQuizzes, totalAttempts int64
 	var avgScore float64
