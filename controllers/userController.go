@@ -27,22 +27,20 @@ type TopicPerformance struct {
 func GetMyProfile(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 
-	// 1. Ambil Data User Basic
 	var user models.User
 	if err := config.DB.First(&user, userID).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 	}
 
-	// 2. Hitung Statistik Dasar (Total Kuis & Rata-rata)
 	var totalQuizzes int64
 	var avgScore float64
 	config.DB.Model(&models.History{}).Where("user_id = ?", userID).Count(&totalQuizzes)
 
-	// Gunakan COALESCE agar tidak error jika null (belum pernah main)
+
 	config.DB.Model(&models.History{}).Where("user_id = ?", userID).
 		Select("COALESCE(AVG(score), 0)").Scan(&avgScore)
 
-	// 3. Hitung Kemenangan (Dari tabel Challenge)
+
 	var totalWins int64
 	config.DB.Model(&models.Challenge{}).
 		Where("winner_id = ?", userID).Count(&totalWins)
@@ -76,6 +74,12 @@ func GetMyProfile(c *fiber.Ctx) error {
 		Group("topics.title").
 		Scan(&topicPerfs)
 
+	calculatedLevel := utils.CalculateLevel(user.XP)
+
+	if calculatedLevel > user.Level {
+		user.Level = calculatedLevel
+		config.DB.Save(&user) // Simpan perbaikan ke database
+	}
 	currentLevel := user.Level
 	nextLevel := currentLevel + 1
 
@@ -86,19 +90,24 @@ func GetMyProfile(c *fiber.Ctx) error {
 	levelProgress := fiber.Map{
 		"current_level":    currentLevel,
 		"current_xp":       user.XP,
-		"level_base_xp":    currentLevelBaseXP,           // XP awal 
-		"next_level_xp":    nextLevelThreshold,           // XP target 
-		"xp_needed":        nextLevelThreshold - user.XP, // Sisa XP yg dibutuhkan
+		"level_base_xp":    currentLevelBaseXP,
+		"next_level_xp":    nextLevelThreshold,
+		"xp_needed":        nextLevelThreshold - user.XP,
 		"progress_percent": 0,
 	}
-
 
 	rangeXP := nextLevelThreshold - currentLevelBaseXP
 	if rangeXP > 0 {
 		progress := float64(user.XP-currentLevelBaseXP) / float64(rangeXP) * 100
-		levelProgress["progress_percent"] = math.Round(progress*10) / 10 // bulatkan 1 desimal
+
+
+		if progress > 100 {
+			progress = 100
+		}
+
+		levelProgress["progress_percent"] = math.Round(progress*10) / 10
 	} else {
-		levelProgress["progress_percent"] = 100 // Max level case
+		levelProgress["progress_percent"] = 100
 	}
 	// Susun Response
 	response := fiber.Map{
