@@ -13,6 +13,7 @@ func main() {
 	config.SeedDatabase()
 	config.SeedExamData()
 	config.SeedAchievements()
+	// config.MigrateOldChallenges()
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{

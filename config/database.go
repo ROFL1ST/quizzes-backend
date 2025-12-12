@@ -66,6 +66,7 @@ func ConnectDB() {
 		&models.Achievement{},
 		&models.Activity{},
 		&models.Challenge{},
+		&models.ChallengeParticipant{},
 		&models.UserAchievement{},
 		&models.SystemConfig{},
 	)
