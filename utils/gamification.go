@@ -3,9 +3,9 @@ package utils
 import (
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
-	"time"
-	"strconv"
 	"math"
+	"strconv"
+	"time"
 )
 
 func UnlockAchievement(userID uint, achievementID uint) {
@@ -121,33 +121,122 @@ func CheckQuizAchievements(userID uint, score int) {
 	}
 }
 
-
 func GetLevelingFactor() float64 {
-    var conf models.SystemConfig
-    config.DB.Where("key = ?", "leveling_factor").Find(&conf)
-    
-    if conf.Value == "" {
-        return 100.0
-    }
-    
-    val, err := strconv.ParseFloat(conf.Value, 64)
-    if err != nil {
-        return 100.0
-    }
-    return val
-}
+	var conf models.SystemConfig
+	config.DB.Where("key = ?", "leveling_factor").Find(&conf)
 
+	if conf.Value == "" {
+		return 100.0
+	}
+
+	val, err := strconv.ParseFloat(conf.Value, 64)
+	if err != nil {
+		return 100.0
+	}
+	return val
+}
 
 func CalculateLevel(xp int64) int {
-    factor := GetLevelingFactor()
-    return int(math.Sqrt(float64(xp)/factor)) + 1
+	factor := GetLevelingFactor()
+	return int(math.Sqrt(float64(xp)/factor)) + 1
 }
 
-
 func CalculateMinXPForLevel(level int) int64 {
-    if level <= 1 {
-        return 0
-    }
-    factor := GetLevelingFactor()
-    return int64(factor * math.Pow(float64(level-1), 2))
+	if level <= 1 {
+		return 0
+	}
+	factor := GetLevelingFactor()
+	return int64(factor * math.Pow(float64(level-1), 2))
+}
+
+func DetermineWinner(challengeID uint) {
+	var challenge models.Challenge
+	// Load participants untuk hitung skor
+	if err := config.DB.Preload("Participants").First(&challenge, challengeID).Error; err != nil {
+		return
+	}
+
+	// Reset dulu status pemenang
+	challenge.WinnerID = nil
+	challenge.WinningTeam = ""
+
+	if challenge.Mode == "2v2" {
+		// --- LOGIC 2V2 (TEAM BASED) ---
+		scoreA, timeA := 0, 0
+		scoreB, timeB := 0, 0
+
+		for _, p := range challenge.Participants {
+			// Hanya hitung peserta yang main (Accepted & Score valid)
+			if p.Status != "accepted" || p.Score == -1 {
+				continue
+			}
+
+			if p.Team == "A" {
+				scoreA += p.Score
+				timeA += p.TimeTaken
+			} else if p.Team == "B" {
+				scoreB += p.Score
+				timeB += p.TimeTaken
+			}
+		}
+
+		// Bandingkan Skor Tim Total
+		if scoreA > scoreB {
+			challenge.WinningTeam = "A"
+		} else if scoreB > scoreA {
+			challenge.WinningTeam = "B"
+		} else {
+			// Jika Seri Skor, Cek Waktu Total (Lebih cepat/kecil menang)
+			if timeA < timeB {
+				challenge.WinningTeam = "A"
+			} else if timeB < timeA {
+				challenge.WinningTeam = "B"
+			} else {
+				challenge.WinningTeam = "DRAW"
+			}
+		}
+
+	} else {
+		// --- LOGIC BATTLE ROYALE & 1V1 (INDIVIDUAL) ---
+		// Pemenang ditentukan berdasarkan:
+		// 1. Poin Tertinggi (Score)
+		// 2. Waktu Tercepat (TimeTaken) - Jika poin sama
+
+		var winnerID uint = 0
+		highestScore := -1
+		lowestTime := 999999999 // Inisialisasi dengan angka besar
+
+		for _, p := range challenge.Participants {
+			// Hanya hitung peserta yang main
+			if p.Status != "accepted" || p.Score == -1 {
+				continue
+			}
+
+			// Cek Poin
+			if p.Score > highestScore {
+				// Found new highest score
+				highestScore = p.Score
+				lowestTime = p.TimeTaken
+				winnerID = p.UserID
+			} else if p.Score == highestScore {
+				// Jika Poin sama, cek siapa lebih cepat (TimeTaken lebih kecil)
+				if p.TimeTaken < lowestTime {
+					lowestTime = p.TimeTaken
+					winnerID = p.UserID
+				}
+			}
+		}
+
+		// Simpan ID Pemenang jika ada
+		if winnerID != 0 {
+			challenge.WinnerID = &winnerID
+		}
+	}
+
+	// Simpan Hasil ke Database
+	config.DB.Save(&challenge)
+	// (Opsional) Kirim Notifikasi ke user bahwa challenge selesai
+	for _, p := range challenge.Participants {
+		SendNotification(p.UserID, "Challenge Selesai! Cek hasilnya.", "/challenges", "info")
+	}
 }

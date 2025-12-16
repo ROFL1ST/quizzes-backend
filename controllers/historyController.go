@@ -73,7 +73,7 @@ func SaveHistory(c *fiber.Ctx) error {
                 if allFinished {
                     challenge.Status = "finished"
                     config.DB.Save(&challenge)
-                    
+                    utils.DetermineWinner(challenge.ID)
                     // Opsional: Logic penentuan pemenang bisa ditaruh disini
                     // utils.DetermineWinner(challenge.ID) 
                 }

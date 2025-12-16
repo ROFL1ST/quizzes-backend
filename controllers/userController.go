@@ -179,21 +179,42 @@ func GetUserProfile(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 	}
 
-	// Untuk profil orang lain, kita hanya tampilkan statistik umum (tanpa detail privat)
+	// 1. Statistik Dasar
 	var totalQuizzes int64
 	config.DB.Model(&models.History{}).Where("user_id = ?", user.ID).Count(&totalQuizzes)
+
+	var totalWins int64
+	config.DB.Model(&models.Challenge{}).Where("winner_id = ?", user.ID).Count(&totalWins)
 
 	stats := fiber.Map{
 		"xp":            user.XP,
 		"level":         user.Level,
 		"total_quizzes": totalQuizzes,
+		"total_wins":    totalWins,       // Tambahan
+		"streak_count":  user.StreakCount, // Tambahan (Duolingo style)
 		"joined_at":     user.CreatedAt,
 	}
 
+	// 2. Ambil Achievements Public (Hanya yang sudah unlock)
+	type PublicAchievement struct {
+		Name        string `json:"name"`
+		IconURL     string `json:"icon_url"`
+		Description string `json:"description"`
+	}
+	var achievements []PublicAchievement
+	
+	config.DB.Table("user_achievements").
+		Select("achievements.name, achievements.icon_url, achievements.description").
+		Joins("JOIN achievements ON achievements.id = user_achievements.achievement_id").
+		Where("user_achievements.user_id = ?", user.ID).
+		Scan(&achievements)
+
 	return utils.SuccessResponse(c, fiber.StatusOK, "User profile retrieved", fiber.Map{
-		"name":     user.Name,
-		"username": user.Username,
-		"stats":    stats,
+		"id":           user.ID, // Penting untuk cek friend status
+		"name":         user.Name,
+		"username":     user.Username,
+		"stats":        stats,
+		"achievements": achievements, // Data baru
 	})
 }
 
