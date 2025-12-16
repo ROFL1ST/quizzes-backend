@@ -30,6 +30,12 @@ func UnlockAchievement(userID uint, achievementID uint) {
 	var ach models.Achievement
 	config.DB.First(&ach, achievementID)
 
+	// 1. Ambil data User untuk mendapatkan Username
+	var user models.User
+	if err := config.DB.First(&user, userID).Error; err != nil {
+		return // Handle jika user tidak ditemukan (opsional)
+	}
+
 	activity := models.Activity{
 		UserID:      userID,
 		Type:        "achievement",
@@ -37,7 +43,8 @@ func UnlockAchievement(userID uint, achievementID uint) {
 	}
 	config.DB.Create(&activity)
 
-	SendNotification(userID, "🏆 Achievement Unlocked: "+ach.Name, "/profile", "success")
+	// 2. Gunakan user.Username pada URL
+	SendNotification(userID, "🏆 Achievement Unlocked: "+ach.Name, "/@"+user.Username, "success")
 }
 
 func CheckQuizAchievements(userID uint, score int) {
