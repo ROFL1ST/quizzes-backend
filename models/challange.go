@@ -15,6 +15,9 @@ type Challenge struct {
 	IsRealtime   bool                   `json:"is_realtime" gorm:"default:false"`
 	Status       string                 `json:"status" gorm:"default:'pending'"` // pending, active, finished
 	Participants []ChallengeParticipant `json:"participants" gorm:"foreignKey:ChallengeID"`
+
+	WinnerID    *uint  `json:"winner_id"`    // Nullable (Pointer) karena bisa DRAW atau Team Win
+	WinningTeam string `json:"winning_team"` // "A", "B", atau "DRAW" (Khusus 2v2)
 }
 
 type ChallengeParticipant struct {
@@ -22,7 +25,7 @@ type ChallengeParticipant struct {
 	ChallengeID uint `json:"challenge_id"`
 	UserID      uint `json:"user_id"`
 	User        User `json:"user" gorm:"foreignKey:UserID"`
-
+	Team       string `json:"team" gorm:"default:'solo'"`
 	Status     string `json:"status" gorm:"default:'pending'"` // pending, accepted, rejected
 	Score      int    `json:"score" gorm:"default:-1"`         // -1 artinya belum main
 	TimeTaken  int    `json:"time_taken" gorm:"default:0"`

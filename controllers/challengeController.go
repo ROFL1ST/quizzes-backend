@@ -28,6 +28,11 @@ func CreateChallenge(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
 	}
 
+	// Validasi input khusus 2v2
+	if input.Mode == "2v2" && len(input.OpponentUsernames) != 3 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Mode 2v2 butuh 3 orang (1 teman, 2 lawan)", nil)
+	}
+
 	// 1. Buat Header Challenge
 	challenge := models.Challenge{
 		CreatorID:  uint(creatorID),
@@ -42,33 +47,60 @@ func CreateChallenge(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed create challenge", err.Error())
 	}
 
-	// 2. Masukkan Creator sebagai Peserta (Status Accepted)
+	// 2. Masukkan Creator sebagai Peserta (Creator selalu Tim A)
+	creatorTeam := "solo"
+	if input.Mode == "2v2" {
+		creatorTeam = "A"
+	}
+
 	creatorPart := models.ChallengeParticipant{
 		ChallengeID: challenge.ID,
 		UserID:      uint(creatorID),
-		Status:      "accepted", // Pembuat otomatis accept
+		Status:      "accepted",
+		Team:        creatorTeam, // Set Tim
 	}
 	config.DB.Create(&creatorPart)
 
-	// 3. Masukkan Lawan sebagai Peserta (Status Pending)
+	// 3. Masukkan Lawan/Teman
 	if len(input.OpponentUsernames) > 0 {
 		var opponents []models.User
+		// Pastikan urutan query sesuai urutan input array (workaround sederhana)
 		config.DB.Where("username IN ?", input.OpponentUsernames).Find(&opponents)
 
-		for _, opp := range opponents {
-			if opp.ID == uint(creatorID) {
+		// Map user untuk memastikan urutan assign tim sesuai input user
+		userMap := make(map[string]models.User)
+		for _, u := range opponents {
+			userMap[u.Username] = u
+		}
+
+		for i, username := range input.OpponentUsernames {
+			opp, exists := userMap[username]
+			if !exists || opp.ID == uint(creatorID) {
 				continue
-			} // Skip diri sendiri
+			}
+
+			team := "solo"
+			if input.Mode == "2v2" {
+				if i == 0 {
+					team = "A" // Teman si Creator
+				} else {
+					team = "B" // Musuh
+				}
+			}
 
 			part := models.ChallengeParticipant{
 				ChallengeID: challenge.ID,
 				UserID:      opp.ID,
 				Status:      "pending",
+				Team:        team, // Set Tim
 			}
 			config.DB.Create(&part)
 
-			// Kirim notifikasi ke lawan
-			utils.SendNotification(opp.ID, "⚔️ Kamu ditantang main "+input.Mode+"!", "/challenges", "warning")
+			msg := "⚔️ Kamu ditantang main " + input.Mode + "!"
+			if input.Mode == "2v2" && team == "A" {
+				msg = "🛡️ Kamu diajak setim main 2v2!"
+			}
+			utils.SendNotification(opp.ID, msg, "/challenges", "warning")
 		}
 	}
 
@@ -207,10 +239,10 @@ func StreamChallengeLobby(c *fiber.Ctx) error {
 			playersJSON, _ := json.Marshal(fiber.Map{
 				"players": formatParticipants(challenge.Participants),
 			})
-			
+
 			// Format Manual: event: ... \n data: ... \n\n
 			initMsg := fmt.Sprintf("event: player_update\ndata: %s\n\n", string(playersJSON))
-			
+
 			// Kirim ke channel
 			msgChan <- initMsg
 		}()
@@ -242,7 +274,6 @@ func StreamChallengeLobby(c *fiber.Ctx) error {
 
 	return nil
 }
-
 
 func StartGameRealtime(c *fiber.Ctx) error {
 	id := c.Params("id")
