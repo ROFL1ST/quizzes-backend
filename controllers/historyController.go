@@ -19,8 +19,6 @@ func SaveHistory(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid data", err.Error())
 	}
 
-	
-
 	// Simpan history
 	history.UserID = uint(userID)
 	if err := config.DB.Create(&history).Error; err != nil {
@@ -29,57 +27,57 @@ func SaveHistory(c *fiber.Ctx) error {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-    go func(uid uint, qID uint, score int, timeTaken int) {
-        defer wg.Done()
+	go func(uid uint, qID uint, score int, timeTaken int) {
+		defer wg.Done()
 
-        var participant models.ChallengeParticipant
+		var participant models.ChallengeParticipant
 
-        // 1. Cari Partisipan (Query tetap sama supaya aman dari ambiguous ID)
-        err := config.DB.Table("challenge_participants").
-            Joins("JOIN challenges ON challenges.id = challenge_participants.challenge_id").
-            Where("challenge_participants.user_id = ? AND challenges.quiz_id = ? AND challenges.status = 'active'", uid, qID).
-            Order("challenges.created_at DESC"). // <--- TAMBAHAN KECIL TAPI PENTING
-            Select("challenge_participants.*").
-            First(&participant).Error
+		// 1. Cari Partisipan (Query tetap sama supaya aman dari ambiguous ID)
+		err := config.DB.Table("challenge_participants").
+			Joins("JOIN challenges ON challenges.id = challenge_participants.challenge_id").
+			Where("challenge_participants.user_id = ? AND challenges.quiz_id = ? AND challenges.status = 'active'", uid, qID).
+			Order("challenges.created_at DESC"). // <--- TAMBAHAN KECIL TAPI PENTING
+			Select("challenge_participants.*").
+			First(&participant).Error
 
-        if err == nil {
-            // --- UPDATE 1: Set Flag IsFinished ---
-            participant.Score = score
-            participant.TimeTaken = timeTaken
-            participant.IsFinished = true // <--- PENTING: Tandai sudah selesai
-            
-            // Simpan perubahan participant
-            config.DB.Save(&participant)
+		if err == nil {
+			// --- UPDATE 1: Set Flag IsFinished ---
+			participant.Score = score
+			participant.TimeTaken = timeTaken
+			participant.IsFinished = true // <--- PENTING: Tandai sudah selesai
 
-            // 2. Cek apakah Challenge Selesai (Semua peserta 'accepted' sudah 'finished')
-            var challenge models.Challenge
-            // Preload participants untuk cek status teman mabar
-            if err := config.DB.Preload("Participants").First(&challenge, participant.ChallengeID).Error; err == nil {
-                
-                allFinished := true
-                for _, p := range challenge.Participants {
-                    // Hanya cek user yang statusnya 'accepted'.
-                    // User 'pending' atau 'rejected' tidak dihitung.
-                    if p.Status == "accepted" {
-                        // Jika ada SATU saja yang belum finish, maka game belum over.
-                        if !p.IsFinished { 
-                            allFinished = false
-                            break
-                        }
-                    }
-                }
+			// Simpan perubahan participant
+			config.DB.Save(&participant)
 
-                // --- UPDATE 2: Jika semua selesai, tutup challenge ---
-                if allFinished {
-                    challenge.Status = "finished"
-                    config.DB.Save(&challenge)
-                    utils.DetermineWinner(challenge.ID)
-                    // Opsional: Logic penentuan pemenang bisa ditaruh disini
-                    // utils.DetermineWinner(challenge.ID) 
-                }
-            }
-        }
-    }(uint(userID), history.QuizID, history.Score, history.TimeTaken)
+			// 2. Cek apakah Challenge Selesai (Semua peserta 'accepted' sudah 'finished')
+			var challenge models.Challenge
+			// Preload participants untuk cek status teman mabar
+			if err := config.DB.Preload("Participants").First(&challenge, participant.ChallengeID).Error; err == nil {
+
+				allFinished := true
+				for _, p := range challenge.Participants {
+					// Hanya cek user yang statusnya 'accepted'.
+					// User 'pending' atau 'rejected' tidak dihitung.
+					if p.Status == "accepted" {
+						// Jika ada SATU saja yang belum finish, maka game belum over.
+						if !p.IsFinished {
+							allFinished = false
+							break
+						}
+					}
+				}
+
+				// --- UPDATE 2: Jika semua selesai, tutup challenge ---
+				if allFinished {
+					challenge.Status = "finished"
+					config.DB.Save(&challenge)
+					utils.DetermineWinner(challenge.ID)
+					// Opsional: Logic penentuan pemenang bisa ditaruh disini
+					// utils.DetermineWinner(challenge.ID)
+				}
+			}
+		}
+	}(uint(userID), history.QuizID, history.Score, history.TimeTaken)
 	// ----------------------------
 	// UPDATE QUESTION SNAPSHOT
 	// ----------------------------
@@ -130,9 +128,10 @@ func SaveHistory(c *fiber.Ctx) error {
 
 			utils.SendNotification(
 				user.ID,
+				"success",
+				"Naik Level!",
 				"⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(newLevel),
 				"/profile",
-				"success",
 			)
 		}
 

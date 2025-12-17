@@ -6,6 +6,8 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/utils" // Import utils
 	"github.com/gofiber/fiber/v2"
 	"time"
+	"github.com/ROFL1ST/quizzes-backend/config"
+	"github.com/ROFL1ST/quizzes-backend/models"
 )
 
 func StreamNotifications(c *fiber.Ctx) error {
@@ -55,4 +57,41 @@ func StreamNotifications(c *fiber.Ctx) error {
 	})
 
 	return nil
+}
+
+func GetMyNotifications(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(float64)
+
+	var notifs []models.Notification
+	// Ambil notifikasi terbaru dulu, limit 50
+	if err := config.DB.Where("user_id = ?", userID).Order("created_at desc").Limit(50).Find(&notifs).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengambil notifikasi", nil)
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Success", notifs)
+}
+
+// PUT /api/notifications/:id/read
+func MarkNotificationRead(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(float64)
+	notifID := c.Params("id")
+
+	// Pastikan notifikasi milik user tersebut
+	result := config.DB.Model(&models.Notification{}).Where("id = ? AND user_id = ?", notifID, userID).Update("is_read", true)
+	
+	if result.Error != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error updating notification", nil)
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Notification read", nil)
+}
+
+// DELETE /api/notifications (Clear All)
+func ClearAllNotifications(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(float64)
+	
+	// Soft delete semua notifikasi user
+	config.DB.Where("user_id = ?", userID).Delete(&models.Notification{})
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "All notifications cleared", nil)
 }
