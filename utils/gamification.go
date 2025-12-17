@@ -43,8 +43,9 @@ func UnlockAchievement(userID uint, achievementID uint) {
 	}
 	config.DB.Create(&activity)
 
-	// 2. Gunakan user.Username pada URL
-	SendNotification(userID, "success", "🏆 Achievement Unlocked: "+ach.Name, "/@"+user.Username, "success")
+	// 2. [UPDATED] Send Notification dengan Title
+	// Format: UserID, Type, Title, Message, Link
+	SendNotification(userID, "success", "Achievement Unlocked!", "🏆 Selamat! Kamu membuka: "+ach.Name, "/@"+user.Username)
 }
 
 func CheckQuizAchievements(userID uint, score int) {
@@ -242,8 +243,9 @@ func DetermineWinner(challengeID uint) {
 
 	// Simpan Hasil ke Database
 	config.DB.Save(&challenge)
-	// (Opsional) Kirim Notifikasi ke user bahwa challenge selesai
+	
+	// [UPDATED] Kirim Notifikasi ke user bahwa challenge selesai
 	for _, p := range challenge.Participants {
-		SendNotification(p.UserID, "info", "Challenge Selesai!", "Silakan cek hasilnya.", "/challenges")
+		SendNotification(p.UserID, "info", "Challenge Selesai", "Kompetisi telah berakhir. Cek hasilnya sekarang!", "/challenges")
 	}
 }
