@@ -57,6 +57,7 @@ func ConnectDB() {
 		&models.Role{},
 		&models.Admin{},
 		&models.User{},
+		&models.PasswordReset{},
 		&models.Friendship{},
 		&models.Topic{},
 		&models.Quiz{},

@@ -5,7 +5,8 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
 	"github.com/gofiber/fiber/v2"
-	"golang.org/x/crypto/bcrypt"
+	// "golang.org/x/crypto/bcrypt"
+	"fmt"
 	"math"
 )
 
@@ -36,10 +37,8 @@ func GetMyProfile(c *fiber.Ctx) error {
 	var avgScore float64
 	config.DB.Model(&models.History{}).Where("user_id = ?", userID).Count(&totalQuizzes)
 
-
 	config.DB.Model(&models.History{}).Where("user_id = ?", userID).
 		Select("COALESCE(AVG(score), 0)").Scan(&avgScore)
-
 
 	var totalWins int64
 	config.DB.Model(&models.Challenge{}).
@@ -100,7 +99,6 @@ func GetMyProfile(c *fiber.Ctx) error {
 	if rangeXP > 0 {
 		progress := float64(user.XP-currentLevelBaseXP) / float64(rangeXP) * 100
 
-
 		if progress > 100 {
 			progress = 100
 		}
@@ -126,16 +124,16 @@ func GetMyProfile(c *fiber.Ctx) error {
 }
 
 func UpdateProfile(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(float64)
+	userID := c.Locals("user_id")
 
 	var input struct {
 		Name     string `json:"name"`
+		Email    string `json:"email"`
 		Username string `json:"username"`
-		Password string `json:"password"` // Opsional
 	}
 
 	if err := c.BodyParser(&input); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", nil)
 	}
 
 	var user models.User
@@ -143,34 +141,79 @@ func UpdateProfile(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 	}
 
-	// Update field jika dikirim
+	// Update Nama
 	if input.Name != "" {
 		user.Name = input.Name
 	}
 
-	// Cek unique username jika diganti
+	// Update Username
 	if input.Username != "" && input.Username != user.Username {
-		var check models.User
-		if err := config.DB.Where("username = ?", input.Username).First(&check).Error; err == nil {
-			return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username already taken", nil)
+		// Cek apakah username sudah dipakai user lain
+		var checkUser models.User
+		if err := config.DB.Where("username = ? AND id != ?", input.Username, user.ID).First(&checkUser).Error; err == nil {
+			return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username already in use", nil)
 		}
 		user.Username = input.Username
 	}
 
-	// Update password jika diisi (hash ulang)
-	if input.Password != "" {
-		hashed, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
-		user.Password = string(hashed)
+	// === LOGIKA UPDATE EMAIL ===
+	if input.Email != "" && input.Email != user.Email {
+		// 1. Cek apakah email sudah dipakai user lain
+		var checkUser models.User
+		if err := config.DB.Where("email = ? AND id != ?", input.Email, user.ID).First(&checkUser).Error; err == nil {
+			return utils.ErrorResponse(c, fiber.StatusBadRequest, "Email already in use", nil)
+		}
+
+		// 2. Set Email baru & Reset status verifikasi
+		user.Email = input.Email
+		user.IsEmailVerified = false
+
+		// 3. Generate Token menggunakan Utility baru
+		user.EmailVerificationToken = utils.GenerateToken()
+
+		// 4. Kirim Email Verifikasi (Gunakan Goroutine agar tidak blocking)
+		go func(emailAddr, tokenStr string) {
+			// Pastikan fungsi SendVerificationEmail sudah ada di utils/email.go
+			err := utils.SendVerificationEmail(emailAddr, tokenStr)
+			if err != nil {
+				fmt.Println("Error sending verification email:", err)
+			} else {
+				fmt.Println("Verification email sent to:", emailAddr)
+			}
+		}(user.Email, user.EmailVerificationToken)
 	}
 
 	if err := config.DB.Save(&user).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed update profile", err.Error())
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update profile", err.Error())
 	}
 
-	return utils.SuccessResponse(c, fiber.StatusOK, "Profile updated", user)
+	// Sembunyikan token dari response
+	user.EmailVerificationToken = ""
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Profile updated. Please check email to verify.", fiber.Map{"user": user})
 }
 
-// Fitur Tambahan: Lihat Profile Teman/Orang Lain
+func VerifyEmail(c *fiber.Ctx) error {
+	var input struct {
+		Token string `json:"token"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", nil)
+	}
+
+	var user models.User
+	if err := config.DB.Where("email_verification_token = ?", input.Token).First(&user).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid or expired token", nil)
+	}
+
+	user.IsEmailVerified = true
+	user.EmailVerificationToken = "" // Hapus token setelah dipakai
+	config.DB.Save(&user)
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Email verified successfully", nil)
+}
+
 func GetUserProfile(c *fiber.Ctx) error {
 	username := c.Params("username")
 
@@ -190,7 +233,7 @@ func GetUserProfile(c *fiber.Ctx) error {
 		"xp":            user.XP,
 		"level":         user.Level,
 		"total_quizzes": totalQuizzes,
-		"total_wins":    totalWins,       // Tambahan
+		"total_wins":    totalWins,        // Tambahan
 		"streak_count":  user.StreakCount, // Tambahan (Duolingo style)
 		"joined_at":     user.CreatedAt,
 	}
@@ -202,7 +245,7 @@ func GetUserProfile(c *fiber.Ctx) error {
 		Description string `json:"description"`
 	}
 	var achievements []PublicAchievement
-	
+
 	config.DB.Table("user_achievements").
 		Select("achievements.name, achievements.icon_url, achievements.description").
 		Joins("JOIN achievements ON achievements.id = user_achievements.achievement_id").
