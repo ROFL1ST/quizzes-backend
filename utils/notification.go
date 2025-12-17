@@ -2,17 +2,12 @@ package utils
 
 import (
 	"encoding/json"
+	"github.com/ROFL1ST/quizzes-backend/config" // Pastikan import config DB
+	"github.com/ROFL1ST/quizzes-backend/models"
 	"sync"
 )
 
-
-type NotificationPayload struct {
-	Message string `json:"message"`
-	Url     string `json:"url"`  
-	Type    string `json:"type"`
-}
-
-
+// Struktur Manager untuk SSE (Realtime)
 type NotificationManager struct {
 	Clients map[uint]chan string
 	Lock    sync.Mutex
@@ -22,21 +17,35 @@ var NotifManager = NotificationManager{
 	Clients: make(map[uint]chan string),
 }
 
+func SendNotification(userID uint, notifType, title, message, link string) {
 
-func SendNotification(userID uint, message string, url string, notifType string) {
-	NotifManager.Lock.Lock()
-	defer NotifManager.Lock.Unlock()
-
-	payload := NotificationPayload{
-		Message: message,
-		Url:     url,
+	notif := models.Notification{
+		UserID:  userID,
 		Type:    notifType,
+		Title:   title,
+		Message: message,
+		Link:    link,
+		IsRead:  false,
 	}
-	jsonMsg, _ := json.Marshal(payload)
+	config.DB.Create(&notif)
 
-	if ch, ok := NotifManager.Clients[userID]; ok {
+	NotifManager.Lock.Lock()
+	clientChan, ok := NotifManager.Clients[userID]
+	NotifManager.Lock.Unlock()
+
+	if ok {
+
+		payload, _ := json.Marshal(map[string]interface{}{
+			"id":      notif.ID,
+			"type":    notifType,
+			"title":   title,
+			"message": message,
+			"link":    link,
+		})
+
+		// Non-blocking send
 		select {
-		case ch <- string(jsonMsg):
+		case clientChan <- string(payload):
 		default:
 		}
 	}

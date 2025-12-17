@@ -100,7 +100,7 @@ func CreateChallenge(c *fiber.Ctx) error {
 			if input.Mode == "2v2" && team == "A" {
 				msg = "🛡️ Kamu diajak setim main 2v2!"
 			}
-			utils.SendNotification(opp.ID, msg, "/challenges", "warning")
+			utils.SendNotification(opp.ID, "warning", "⚔️ Challenge", msg, "/challenges")
 		}
 	}
 

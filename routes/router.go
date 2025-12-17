@@ -14,7 +14,7 @@ func SetupRoutes(app *fiber.App) {
 	api.Post("/login", controllers.LoginUser)
 	api.Post("/admin/register", controllers.RegisterAdmin)
 	api.Post("/admin/login", controllers.LoginAdmin)
-	
+
 	// verify email
 	api.Post("/verify-email", controllers.VerifyEmail)
 	// forgot password
@@ -55,6 +55,11 @@ func SetupRoutes(app *fiber.App) {
 	roleGroup.Post("/", controllers.CreateRole)
 	roleGroup.Get("/", controllers.GetAllRoles)
 
+	// notif
+	notifGroup := api.Group("/notifications", middleware.Protected())
+	notifGroup.Get("/", controllers.GetMyNotifications)
+	notifGroup.Put("/:id/read", controllers.MarkNotificationRead)
+	notifGroup.Delete("/", controllers.ClearAllNotifications)
 
 	// question admin routes
 	questionGroup := adminGroup.Group("/questions", middleware.AllowRoles("supervisor", "admin", "pengajar"))
@@ -98,15 +103,13 @@ func SetupRoutes(app *fiber.App) {
 	challenges.Get("/:id/lobby-stream", controllers.StreamChallengeLobby)
 	challenges.Post("/:id/start", controllers.StartGameRealtime)
 
-
-
 	// Activity Feed
 	api.Get("/feed", middleware.Protected(), controllers.GetFriendActivity)
 
 	// User Profile & Settings
 	userGroup := api.Group("/users", middleware.Protected())
-    userGroup.Get("/me", controllers.GetMyProfile)        // Lihat profil & statistik sendiri
+	userGroup.Get("/me", controllers.GetMyProfile) // Lihat profil & statistik sendiri
 	userGroup.Get("/achievements", controllers.GetMyAchievements)
-    userGroup.Put("/me", controllers.UpdateProfile)       // Ganti nama/password
-    userGroup.Get("/:username", controllers.GetUserProfile)
+	userGroup.Put("/me", controllers.UpdateProfile) // Ganti nama/password
+	userGroup.Get("/:username", controllers.GetUserProfile)
 }

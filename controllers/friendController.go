@@ -57,7 +57,7 @@ func RequestFriend(c *fiber.Ctx) error {
 		utils.UnlockAchievement(uint(userID), 16)
 	}
 
-	utils.SendNotification(friend.ID, "👋 Permintaan teman baru dari "+input.Username, "/friends", "info")
+	utils.SendNotification(friend.ID, "info", "Permintaan Teman Baru","👋 Permintaan teman baru dari "+input.Username, "/friends")
 	return utils.SuccessResponse(c, fiber.StatusCreated, "Friend request sent", nil)
 }
 

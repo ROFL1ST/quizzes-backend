@@ -70,6 +70,7 @@ func ConnectDB() {
 		&models.ChallengeParticipant{},
 		&models.UserAchievement{},
 		&models.SystemConfig{},
+		&models.Notification{},
 	)
 
 	if err != nil {
