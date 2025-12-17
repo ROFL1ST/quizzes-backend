@@ -14,6 +14,12 @@ func SetupRoutes(app *fiber.App) {
 	api.Post("/login", controllers.LoginUser)
 	api.Post("/admin/register", controllers.RegisterAdmin)
 	api.Post("/admin/login", controllers.LoginAdmin)
+	
+	// verify email
+	api.Post("/verify-email", controllers.VerifyEmail)
+	// forgot password
+	api.Post("/forgot-password", controllers.ForgotPassword)
+	api.Post("/reset-password", controllers.ResetPassword)
 
 	api.Get("/topics", controllers.GetAllTopics)
 	api.Get("/auth/me", middleware.Protected(), controllers.AuthMe)

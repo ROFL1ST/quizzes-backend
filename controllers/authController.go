@@ -3,7 +3,7 @@ package controllers
 import (
 	"os"
 	"time"
-
+	"fmt"
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
@@ -199,4 +199,83 @@ func AuthMe(c *fiber.Ctx) error {
 			"role":  role,
 		})
 	}
+}
+
+func ForgotPassword(c *fiber.Ctx) error {
+	var input struct {
+		Email string `json:"email"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", nil)
+	}
+
+	var user models.User
+	if err := config.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		// Return 404 jika email tidak ditemukan
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Email not found", nil)
+	}
+
+	// Cek apakah email sudah diverifikasi
+	if !user.IsEmailVerified {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Email not verified. Please verify via settings first.", nil)
+	}
+
+	// 1. Generate Token menggunakan Utility
+	token := utils.GenerateToken()
+
+	// 2. Simpan ke tabel PasswordReset
+	// Hapus token lama jika ada
+	config.DB.Where("email = ?", input.Email).Delete(&models.PasswordReset{}) 
+	
+	resetEntry := models.PasswordReset{
+		Email:     input.Email,
+		Token:     token,
+		ExpiredAt: time.Now().Add(1 * time.Hour), // Token berlaku 1 jam
+	}
+	config.DB.Create(&resetEntry)
+
+	// 3. Kirim Email Reset (Goroutine)
+	go func(emailAddr, tokenStr string) {
+		err := utils.SendResetPasswordEmail(emailAddr, tokenStr)
+		if err != nil {
+			fmt.Println("Error sending reset email:", err)
+		} else {
+			fmt.Println("Reset email sent to:", emailAddr)
+		}
+	}(input.Email, token)
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Password reset link sent to your email", nil)
+}
+
+// ResetPassword menangani perubahan password dengan token
+func ResetPassword(c *fiber.Ctx) error {
+	var input struct {
+		Token       string `json:"token"`
+		NewPassword string `json:"new_password"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", nil)
+	}
+
+	// 1. Validasi Token
+	var resetData models.PasswordReset
+	if err := config.DB.Where("token = ? AND expired_at > ?", input.Token, time.Now()).First(&resetData).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid or expired token", nil)
+	}
+
+	// 2. Hash Password Baru
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(input.NewPassword), 10)
+
+	// 3. Update Password User
+	// Kita cari user berdasarkan email yang tersimpan di tabel reset
+	if err := config.DB.Model(&models.User{}).Where("email = ?", resetData.Email).Update("password", string(hashed)).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update password", nil)
+	}
+
+	// 4. Hapus token agar tidak bisa dipakai lagi
+	config.DB.Delete(&resetData)
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Password updated successfully. Please login.", nil)
 }
