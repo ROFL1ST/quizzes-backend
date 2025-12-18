@@ -328,7 +328,6 @@ func formatParticipants(parts []models.ChallengeParticipant) []map[string]interf
 	return result
 }
 
-
 type ProgressInput struct {
 	CurrentIndex int `json:"current_index"`
 	TotalSoal    int `json:"total_soal"`
@@ -342,6 +341,10 @@ func UpdateChallengeProgress(c *fiber.Ctx) error {
 
 	userID := c.Locals("user_id").(float64)
 
+	var user = &models.User{}
+	if err := config.DB.First(&user, uint(userID)).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+	}
 	var input ProgressInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", nil)
@@ -355,6 +358,7 @@ func UpdateChallengeProgress(c *fiber.Ctx) error {
 
 	utils.BroadcastLobby(challengeID, "opponent_progress", fiber.Map{
 		"user_id":  userID,
+		"username": user.Username,
 		"progress": percentage,
 		"index":    input.CurrentIndex,
 	})
