@@ -13,6 +13,7 @@ func main() {
 	config.SeedDatabase()
 	config.SeedExamData()
 	config.SeedAchievements()
+	config.SeedShopItems()
 	// config.MigrateOldChallenges()
 	app := fiber.New()
 

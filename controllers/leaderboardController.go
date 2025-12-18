@@ -9,9 +9,11 @@ import (
 )
 
 type LeaderboardEntry struct {
-	Name        string `json:"name"`
-	Username    string `json:"username"`
-	TotalPoints int64  `json:"total_points"`
+	UserID        uint          `json:"user_id"`
+	Name          string        `json:"name"`
+	Username      string        `json:"username"`
+	TotalPoints   int64         `json:"total_points"`
+	EquippedItems []models.Item `json:"equipped_items" gorm:"-"`
 }
 
 func GetLeaderboardByTopic(c *fiber.Ctx) error {
@@ -25,7 +27,7 @@ func GetLeaderboardByTopic(c *fiber.Ctx) error {
 	var results []LeaderboardEntry
 
 	err := config.DB.Table("histories").
-		Select("users.name, users.username, SUM(histories.score) as total_points").
+		Select("users.id as user_id, users.name, users.username, SUM(histories.score) as total_points").
 		Joins("JOIN users ON users.id = histories.user_id").
 		Joins("JOIN quizzes ON quizzes.id = histories.quiz_id").
 		Where("quizzes.topic_id = ?", topic.ID).
@@ -36,6 +38,17 @@ func GetLeaderboardByTopic(c *fiber.Ctx) error {
 
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed calculate leaderboard", err.Error())
+	}
+
+	for i := range results {
+		var items []models.Item
+
+		config.DB.Table("items").
+			Joins("JOIN user_items ON user_items.item_id = items.id").
+			Where("user_items.user_id = ? AND user_items.is_equipped = ?", results[i].UserID, true).
+			Find(&items)
+
+		results[i].EquippedItems = items
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Leaderboard retrieved", results)

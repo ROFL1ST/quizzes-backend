@@ -1,12 +1,12 @@
 package controllers
 
 import (
-	"os"
-	"time"
 	"fmt"
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
+	"os"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
@@ -51,7 +51,10 @@ func LoginUser(c *fiber.Ctx) error {
 	}
 
 	var user models.User
-	config.DB.Where("username = ?", input.Username).First(&user)
+	if err := config.DB.Preload("UserItems.Item").Where("username = ?", input.Username).First(&user).Error; err != nil {
+		
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+	}
 	if user.ID == 0 {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 	}
@@ -68,21 +71,52 @@ func LoginUser(c *fiber.Ctx) error {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	t, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 	now := time.Now()
+	coinsGained := 0
+	streakMessage := ""
+
 	if user.LastActivityDate != nil {
 		diff := now.Sub(*user.LastActivityDate).Hours()
 
 		if diff >= 24 && diff < 48 {
+			// Login hari berikutnya (Streak Lanjut!)
 			user.StreakCount++
+
+			// Rumus: 10 Koin + (Streak * 5). Maksimal bonus harian 100.
+			bonus := user.StreakCount * 5
+			if bonus > 50 {
+				bonus = 50
+			}
+			coinsGained = 10 + bonus
+
+			streakMessage = fmt.Sprintf("Streak x%d! Kamu dapat %d Koin.", user.StreakCount, coinsGained)
+
 		} else if diff >= 48 {
+
 			user.StreakCount = 1
+			coinsGained = 10
+			streakMessage = "Streak terputus. Mulai lagi dari hari ke-1."
+		} else {
+
+			coinsGained = 0
 		}
 	} else {
+
 		user.StreakCount = 1
+		coinsGained = 50
+		streakMessage = "Selamat datang! Bonus awal 50 Koin."
 	}
 
+	// Simpan perubahan
+	user.Coins += coinsGained
 	user.LastActivityDate = &now
 	config.DB.Save(&user)
-	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{"token": t, "user": user})
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{
+		"token":          t,
+		"user":           user,
+		"streak_message": streakMessage,
+		"coins_gained":   coinsGained,
+	})
 }
 
 func RegisterAdmin(c *fiber.Ctx) error {
@@ -150,7 +184,7 @@ func AuthMe(c *fiber.Ctx) error {
 
 		var user models.User
 
-		if err := config.DB.First(&user, userID).Error; err != nil {
+		if err := config.DB.Preload("UserItems.Item").First(&user, userID).Error; err != nil {
 			return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 		}
 
@@ -166,10 +200,17 @@ func AuthMe(c *fiber.Ctx) error {
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		t, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 
+		var equippedItems []models.Item
+		config.DB.Table("items").
+			Joins("JOIN user_items ON user_items.item_id = items.id").
+			Where("user_items.user_id = ? AND user_items.is_equipped = ?", user.ID, true).
+			Find(&equippedItems)
+
 		return utils.SuccessResponse(c, fiber.StatusOK, "User session refreshed", fiber.Map{
-			"token": t,
-			"user":  user,
-			"role":  "user",
+			"token":          t,
+			"user":           user,
+			"role":           "user",
+			"equipped_items": equippedItems,
 		})
 
 	} else {
@@ -226,8 +267,8 @@ func ForgotPassword(c *fiber.Ctx) error {
 
 	// 2. Simpan ke tabel PasswordReset
 	// Hapus token lama jika ada
-	config.DB.Where("email = ?", input.Email).Delete(&models.PasswordReset{}) 
-	
+	config.DB.Where("email = ?", input.Email).Delete(&models.PasswordReset{})
+
 	resetEntry := models.PasswordReset{
 		Email:     input.Email,
 		Token:     token,

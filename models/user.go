@@ -16,7 +16,9 @@ type User struct {
 	XP                     int64      `json:"xp" gorm:"default:0"`
 	Level                  int        `json:"level" gorm:"default:1"`
 	StreakCount            int        `json:"streak_count" gorm:"default:0"`
+	Coins                  int        `json:"coins" gorm:"default:0"`
 	LastActivityDate       *time.Time `json:"last_activity_date"`
+	UserItems              []UserItem `json:"equipped_items" gorm:"foreignKey:UserID"`
 }
 
 type PasswordReset struct {

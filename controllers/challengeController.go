@@ -323,10 +323,11 @@ func formatParticipants(parts []models.ChallengeParticipant) []map[string]interf
 			"user_id": p.UserID,
 			"name":    p.User.Name,
 			"status":  p.Status,
+			"team":    p.Team, 
 		})
 	}
 	return result
-}
+}	
 
 type ProgressInput struct {
 	CurrentIndex int `json:"current_index"`
