@@ -327,3 +327,41 @@ func formatParticipants(parts []models.ChallengeParticipant) []map[string]interf
 	}
 	return result
 }
+
+type ProgressInput struct {
+	CurrentIndex int `json:"current_index"`
+	TotalSoal    int `json:"total_soal"`
+}
+
+// fungsi untuk mengupdate progress challenge realtime
+func UpdateChallengeProgress(c *fiber.Ctx) error {
+	id := c.Params("id") // Challenge ID
+	challengeIDData, _ := strconv.Atoi(id)
+	challengeID := uint(challengeIDData)
+
+	userID := c.Locals("user_id").(float64)
+
+	var user = &models.User{}
+	if err := config.DB.First(&user, uint(userID)).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+	}
+	var input ProgressInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", nil)
+	}
+
+	// Hitung persentase progress
+	percentage := 0
+	if input.TotalSoal > 0 {
+		percentage = int((float64(input.CurrentIndex) / float64(input.TotalSoal)) * 100)
+	}
+
+	utils.BroadcastLobby(challengeID, "opponent_progress", fiber.Map{
+		"user_id":  userID,
+		"username": user.Username,
+		"progress": percentage,
+		"index":    input.CurrentIndex,
+	})
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Progress updated", nil)
+}
