@@ -68,6 +68,12 @@ func SetupRoutes(app *fiber.App) {
 	questionGroup.Post("/bulk", controllers.BulkUploadQuestions)
 	questionGroup.Put("/:id", controllers.UpdateQuestionAdmin)
 	questionGroup.Delete("/:id", controllers.DeleteQuestionAdmin)
+
+	// shop routes admin
+	shopAdmin := adminGroup.Group("/shop", middleware.AllowRoles("supervisor", "admin"))
+	shopAdmin.Post("/items", controllers.CreateShopItem)
+	shopAdmin.Put("/items/:id", controllers.UpdateShopItem)
+	shopAdmin.Delete("/items/:id", controllers.DeleteShopItem)
 	// =============================================================
 
 	// User Routes
@@ -109,8 +115,16 @@ func SetupRoutes(app *fiber.App) {
 
 	// User Profile & Settings
 	userGroup := api.Group("/users", middleware.Protected())
+	userGroup.Get("/search", controllers.SearchUsers)
 	userGroup.Get("/me", controllers.GetMyProfile) // Lihat profil & statistik sendiri
 	userGroup.Get("/achievements", controllers.GetMyAchievements)
 	userGroup.Put("/me", controllers.UpdateProfile) // Ganti nama/password
 	userGroup.Get("/:username", controllers.GetUserProfile)
+
+	// Shop Routes
+	shopGroup := api.Group("/shop", middleware.Protected())
+	shopGroup.Get("/items", controllers.GetShopItems)
+	shopGroup.Post("/buy", controllers.BuyItem)
+	shopGroup.Get("/inventory", controllers.GetMyInventory)
+	shopGroup.Post("/equip", controllers.EquipItem)
 }

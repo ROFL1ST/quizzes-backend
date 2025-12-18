@@ -71,6 +71,8 @@ func ConnectDB() {
 		&models.UserAchievement{},
 		&models.SystemConfig{},
 		&models.Notification{},
+		&models.Item{},
+		&models.UserItem{},
 	)
 
 	if err != nil {

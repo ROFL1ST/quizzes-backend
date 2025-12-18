@@ -32,38 +32,38 @@ type QuestionAnalysis struct {
 }
 
 type ConfigInput struct {
-    Value string `json:"value"`
+	Value string `json:"value"`
 }
 
 func GetLevelingConfig(c *fiber.Ctx) error {
-    var conf models.SystemConfig
-    if err := config.DB.Where("key = ?", "leveling_factor").First(&conf).Error; err != nil {
-        // Jika belum ada, return default
-        return utils.SuccessResponse(c, fiber.StatusOK, "Config retrieved", fiber.Map{"value": "100"})
-    }
-    return utils.SuccessResponse(c, fiber.StatusOK, "Config retrieved", conf)
+	var conf models.SystemConfig
+	if err := config.DB.Where("key = ?", "leveling_factor").First(&conf).Error; err != nil {
+		// Jika belum ada, return default
+		return utils.SuccessResponse(c, fiber.StatusOK, "Config retrieved", fiber.Map{"value": "100"})
+	}
+	return utils.SuccessResponse(c, fiber.StatusOK, "Config retrieved", conf)
 }
 
 func UpdateLevelingConfig(c *fiber.Ctx) error {
-    var input ConfigInput
-    if err := c.BodyParser(&input); err != nil {
-        return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", nil)
-    }
+	var input ConfigInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", nil)
+	}
 
-    // Validasi angka
-    if _, err := strconv.ParseFloat(input.Value, 64); err != nil {
-        return utils.ErrorResponse(c, fiber.StatusBadRequest, "Value must be a number", nil)
-    }
+	// Validasi angka
+	if _, err := strconv.ParseFloat(input.Value, 64); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Value must be a number", nil)
+	}
 
-    var conf models.SystemConfig
-    // Upsert (Update jika ada, Create jika tidak)
-    config.DB.Where("key = ?", "leveling_factor").Assign(models.SystemConfig{Value: input.Value}).FirstOrCreate(&conf)
-    
-    // Simpan nilai baru
-    conf.Value = input.Value
-    config.DB.Save(&conf)
+	var conf models.SystemConfig
+	// Upsert (Update jika ada, Create jika tidak)
+	config.DB.Where("key = ?", "leveling_factor").Assign(models.SystemConfig{Value: input.Value}).FirstOrCreate(&conf)
 
-    return utils.SuccessResponse(c, fiber.StatusOK, "Leveling difficulty updated", conf)
+	// Simpan nilai baru
+	conf.Value = input.Value
+	config.DB.Save(&conf)
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Leveling difficulty updated", conf)
 }
 
 func GetDashboardAnalytics(c *fiber.Ctx) error {
@@ -391,4 +391,39 @@ func BulkUploadQuestions(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusCreated, "Bulk upload success", fiber.Map{
 		"total_inserted": len(questions),
 	})
+}
+
+func CreateShopItem(c *fiber.Ctx) error {
+	var item models.Item
+	if err := c.BodyParser(&item); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
+	}
+	if err := config.DB.Create(&item).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed create item", err.Error())
+	}
+	return utils.SuccessResponse(c, fiber.StatusCreated, "Item created", item)
+
+}
+
+func UpdateShopItem(c *fiber.Ctx) error {
+	id := c.Params("id")
+	var item models.Item
+	if err := config.DB.First(&item, id).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Item not found", nil)
+	}
+	if err := c.BodyParser(&item); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
+	}
+	if err := config.DB.Save(&item).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed update item", err.Error())
+	}
+	return utils.SuccessResponse(c, fiber.StatusOK, "Item updated", item)
+}
+
+func DeleteShopItem(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if err := config.DB.Delete(&models.Item{}, id).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed delete item", err.Error())
+	}
+	return utils.SuccessResponse(c, fiber.StatusOK, "Item deleted", nil)
 }

@@ -4,9 +4,17 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
-
+	"time"
 	"github.com/gofiber/fiber/v2"
 )
+
+type FriendResponse struct {
+    ID            uint          `json:"id"`
+    Name          string        `json:"name"`
+    Username      string        `json:"username"`
+    Level         int           `json:"level"`
+    EquippedItems []models.Item `json:"equipped_items"` // <--- Tambahkan ini
+}
 
 func RequestFriend(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
@@ -117,41 +125,99 @@ func GetMyFriends(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 	var friendships []models.Friendship
 
-	// Ambil data dimana user terlibat (baik sebagai pengirim atau penerima) DAN status accepted
+	// 1. Ambil data friendship (User terlibat & accepted)
 	config.DB.Preload("Friend").Preload("User").
 		Where("(user_id = ? OR friend_id = ?) AND status = 'accepted'", userID, userID).
 		Find(&friendships)
 
-	// Formatting output agar rapi (hanya menampilkan list teman)
-	var friendList []models.User
+	// 2. Formatting Output dengan Equipped Items
+	var friendList []FriendResponse // Gunakan struct response custom
+
 	for _, f := range friendships {
+		var friendData models.User
+		
+		// Tentukan mana yang 'Teman' (bukan diri sendiri)
 		if f.UserID == uint(userID) {
-			friendList = append(friendList, f.Friend) // Temannya adalah 'Friend'
+			friendData = f.Friend
 		} else {
-			friendList = append(friendList, f.User) // Temannya adalah 'User' (requester)
+			friendData = f.User
 		}
+
+		// === LOGIC BARU: Ambil Item yang dipakai teman ===
+		var equippedItems []models.Item
+		config.DB.Table("items").
+			Joins("JOIN user_items ON user_items.item_id = items.id").
+			Where("user_items.user_id = ? AND user_items.is_equipped = ?", friendData.ID, true).
+			Find(&equippedItems)
+
+		// Append ke list response
+		friendList = append(friendList, FriendResponse{
+			ID:            friendData.ID,
+			Name:          friendData.Name,
+			Username:      friendData.Username,
+			Level:         friendData.Level,
+			EquippedItems: equippedItems, // Masukkan data frame/title
+		})
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Friends retrieved", friendList)
 }
 
-// 5. Get Pending Requests (Lihat siapa yang minta berteman ke saya)
+
 func GetFriendRequests(c *fiber.Ctx) error {
 	myID := c.Locals("user_id").(float64)
 	var requests []models.Friendship
 
-	// Cari yang FriendID-nya SAYA dan status pending
-	config.DB.Preload("User"). // Load data si pengirim (Requester)
-					Where("friend_id = ? AND status = 'pending'", myID).
-					Find(&requests)
 
-	return utils.SuccessResponse(c, fiber.StatusOK, "Pending requests", requests)
+	if err := config.DB.Preload("User").
+		Where("friend_id = ? AND status = 'pending'", myID).
+		Find(&requests).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch requests", nil)
+	}
+
+	
+	type UserWithItems struct {
+		models.User
+		EquippedItems []models.Item `json:"equipped_items"`
+	}
+
+	type RequestResponse struct {
+		ID        uint          `json:"id"` 
+		Status    string        `json:"status"`
+		CreatedAt time.Time     `json:"created_at"`
+		User      UserWithItems `json:"user"` 
+	}
+
+	var responseList []RequestResponse
+
+	
+	for _, req := range requests {
+		var items []models.Item
+
+		
+		config.DB.Table("items").
+			Joins("JOIN user_items ON user_items.item_id = items.id").
+			Where("user_items.user_id = ? AND user_items.is_equipped = ?", req.UserID, true).
+			Find(&items)
+
+		responseList = append(responseList, RequestResponse{
+			ID:        req.ID,
+			Status:    req.Status,
+			CreatedAt: req.CreatedAt,
+			User: UserWithItems{
+				User:          req.User,
+				EquippedItems: items,
+			},
+		})
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Pending requests", responseList)
 }
 
-// 6. Delete Friend (Menghapus teman yang sudah accepted)
+
 func RemoveFriend(c *fiber.Ctx) error {
 	myID := c.Locals("user_id").(float64)
-	targetID := c.Params("id") // ID teman yang mau dihapus
+	targetID := c.Params("id") 
 
 	// Hapus hubungan dua arah
 	result := config.DB.Where(

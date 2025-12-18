@@ -25,6 +25,46 @@ type TopicPerformance struct {
 	AvgScore  float64 `json:"avg_score"`
 }
 
+func SearchUsers(c *fiber.Ctx) error {
+	
+	query := c.Query("q")
+	if query == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Query parameter 'q' is required", nil)
+	}
+
+	var users []models.User
+	
+	if err := config.DB.Where("username ILIKE ? OR name ILIKE ?", "%"+query+"%", "%"+query+"%").Limit(10).Find(&users).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to search users", nil)
+	}
+
+	
+	type SearchResponse struct {
+		models.User
+		EquippedItems []models.Item `json:"equipped_items"`
+	}
+
+	var results []SearchResponse
+
+	// 3. Fix: Loop setiap user untuk ambil item masing-masing
+	for _, u := range users {
+		var items []models.Item
+		
+		config.DB.Table("items").
+			Joins("JOIN user_items ON user_items.item_id = items.id").
+			Where("user_items.user_id = ? AND user_items.is_equipped = ?", u.ID, true).
+			Find(&items)
+
+		// Masukkan ke list hasil
+		results = append(results, SearchResponse{
+			User:          u,
+			EquippedItems: items,
+		})
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Users retrieved", results)
+}
+
 func GetMyProfile(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 
@@ -107,6 +147,12 @@ func GetMyProfile(c *fiber.Ctx) error {
 	} else {
 		levelProgress["progress_percent"] = 100
 	}
+
+	var equippedItems []models.Item
+	config.DB.Table("items").
+		Joins("JOIN user_items ON user_items.item_id = items.id").
+		Where("user_items.user_id = ? AND user_items.is_equipped = ?", userID, true).
+		Find(&equippedItems)
 	// Susun Response
 	response := fiber.Map{
 		"user": user,
@@ -118,6 +164,7 @@ func GetMyProfile(c *fiber.Ctx) error {
 		},
 		"topic_performance": topicPerfs,
 		"level_progress":    levelProgress,
+		"equipped_items":    equippedItems,
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Profile retrieved", response)
@@ -252,12 +299,19 @@ func GetUserProfile(c *fiber.Ctx) error {
 		Where("user_achievements.user_id = ?", user.ID).
 		Scan(&achievements)
 
+	var equippedItems []models.Item
+	config.DB.Table("items").
+		Joins("JOIN user_items ON user_items.item_id = items.id").
+		Where("user_items.user_id = ? AND user_items.is_equipped = ?", user.ID, true).
+		Find(&equippedItems)
+
 	return utils.SuccessResponse(c, fiber.StatusOK, "User profile retrieved", fiber.Map{
-		"id":           user.ID, // Penting untuk cek friend status
-		"name":         user.Name,
-		"username":     user.Username,
-		"stats":        stats,
-		"achievements": achievements, // Data baru
+		"id":             user.ID, // Penting untuk cek friend status
+		"name":           user.Name,
+		"username":       user.Username,
+		"stats":          stats,
+		"achievements":   achievements, // Data baru
+		"equipped_items": equippedItems,
 	})
 }
 
