@@ -6,60 +6,98 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"strconv"
 	"sync"
 )
 
+type CreateHistoryInput struct {
+	QuizID      uint            `json:"quiz_id" validate:"required"`
+	QuizTitle   string          `json:"quiz_title"`
+	Score       int             `json:"score"`
+	TotalSoal   int             `json:"total_soal"`
+	Snapshot    json.RawMessage `json:"snapshot"`
+	TimeTaken   int             `json:"time_taken"`
+	ChallengeID uint            `json:"challenge_id"`
+}
+
 func SaveHistory(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
-	var history models.History
 
-	if err := c.BodyParser(&history); err != nil {
+	// Gunakan struct input baru, bukan langsung models.History
+	var input CreateHistoryInput
+	if err := c.BodyParser(&input); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid data", err.Error())
 	}
 
-	// Simpan history
-	history.UserID = uint(userID)
+	// Mapping ke Model History
+	history := models.History{
+		UserID:    uint(userID),
+		QuizID:    input.QuizID,
+		QuizTitle: input.QuizTitle,
+		Score:     input.Score,
+		Snapshot:  datatypes.JSON(input.Snapshot),
+		TimeTaken: input.TimeTaken,
+	}
+
+	// Simpan history ke Database
 	if err := config.DB.Create(&history).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed save history", err.Error())
 	}
 
+	var currentUser models.User
+	if err := config.DB.First(&currentUser, uint(userID)).Error; err == nil {
+		// Jika ChallengeID ada (dikirim dari frontend), kirim sinyal ke lobby
+		if input.ChallengeID != 0 {
+			utils.BroadcastLobby(input.ChallengeID, "player_finished", fiber.Map{
+				"user_id":  userID,
+				"username": currentUser.Name, // Atau currentUser.Username
+				"score":    input.Score,
+				"status":   "finished",
+			})
+		}
+	}
+
+	// =================================================================
+	// LOGIC UPDATE CHALLENGE PARTICIPANT (ASYNC)
+	// =================================================================
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go func(uid uint, qID uint, score int, timeTaken int) {
+	go func(uid uint, qID uint, score int, timeTaken int, challengeID uint) {
 		defer wg.Done()
 
 		var participant models.ChallengeParticipant
+		var err error
 
-		// 1. Cari Partisipan (Query tetap sama supaya aman dari ambiguous ID)
-		err := config.DB.Table("challenge_participants").
-			Joins("JOIN challenges ON challenges.id = challenge_participants.challenge_id").
-			Where("challenge_participants.user_id = ? AND challenges.quiz_id = ? AND challenges.status = 'active'", uid, qID).
-			Order("challenges.created_at DESC"). // <--- TAMBAHAN KECIL TAPI PENTING
-			Select("challenge_participants.*").
-			First(&participant).Error
+		// Optimasi: Jika challengeID dikirim, cari langsung by ID
+		if challengeID != 0 {
+			err = config.DB.Where("challenge_id = ? AND user_id = ?", challengeID, uid).First(&participant).Error
+		} else {
+			// Fallback ke logic lama (cari berdasarkan quiz_id aktif terakhir)
+			err = config.DB.Table("challenge_participants").
+				Joins("JOIN challenges ON challenges.id = challenge_participants.challenge_id").
+				Where("challenge_participants.user_id = ? AND challenges.quiz_id = ? AND challenges.status = 'active'", uid, qID).
+				Order("challenges.created_at DESC").
+				Select("challenge_participants.*").
+				First(&participant).Error
+		}
 
 		if err == nil {
-			// --- UPDATE 1: Set Flag IsFinished ---
+			// Update Status Partisipan
 			participant.Score = score
 			participant.TimeTaken = timeTaken
-			participant.IsFinished = true // <--- PENTING: Tandai sudah selesai
+			participant.IsFinished = true 
 
-			// Simpan perubahan participant
 			config.DB.Save(&participant)
 
-			// 2. Cek apakah Challenge Selesai (Semua peserta 'accepted' sudah 'finished')
+			// Cek apakah Challenge Selesai (Semua peserta 'accepted' sudah 'finished')
 			var challenge models.Challenge
-			// Preload participants untuk cek status teman mabar
 			if err := config.DB.Preload("Participants").First(&challenge, participant.ChallengeID).Error; err == nil {
 
 				allFinished := true
 				for _, p := range challenge.Participants {
-					// Hanya cek user yang statusnya 'accepted'.
-					// User 'pending' atau 'rejected' tidak dihitung.
 					if p.Status == "accepted" {
-						// Jika ada SATU saja yang belum finish, maka game belum over.
 						if !p.IsFinished {
 							allFinished = false
 							break
@@ -67,17 +105,16 @@ func SaveHistory(c *fiber.Ctx) error {
 					}
 				}
 
-				// --- UPDATE 2: Jika semua selesai, tutup challenge ---
+				// Jika semua selesai, tutup challenge
 				if allFinished {
 					challenge.Status = "finished"
 					config.DB.Save(&challenge)
 					utils.DetermineWinner(challenge.ID)
-					// Opsional: Logic penentuan pemenang bisa ditaruh disini
-					// utils.DetermineWinner(challenge.ID)
 				}
 			}
 		}
-	}(uint(userID), history.QuizID, history.Score, history.TimeTaken)
+	}(uint(userID), history.QuizID, history.Score, history.TimeTaken, input.ChallengeID)
+
 	// ----------------------------
 	// UPDATE QUESTION SNAPSHOT
 	// ----------------------------
@@ -108,26 +145,25 @@ func SaveHistory(c *fiber.Ctx) error {
 	}(history.QuizID, history.Snapshot)
 
 	// ----------------------------
-	// UPDATE XP USER
+	// UPDATE XP USER (Menggunakan currentUser yang sudah diload di atas)
 	// ----------------------------
-	var user models.User
-	if err := config.DB.First(&user, uint(userID)).Error; err == nil {
+	if currentUser.ID != 0 {
 		xpGained := history.Score
-		user.XP += int64(xpGained)
-		newLevel := utils.CalculateLevel(user.XP)
+		currentUser.XP += int64(xpGained)
+		newLevel := utils.CalculateLevel(currentUser.XP)
 
-		if newLevel > user.Level {
-			user.Level = newLevel
+		if newLevel > currentUser.Level {
+			currentUser.Level = newLevel
 
 			activity := models.Activity{
-				UserID:      user.ID,
+				UserID:      currentUser.ID,
 				Type:        "level_up",
 				Description: "Naik ke Level " + strconv.Itoa(newLevel),
 			}
 			config.DB.Create(&activity)
 
 			utils.SendNotification(
-				user.ID,
+				currentUser.ID,
 				"success",
 				"Naik Level!",
 				"⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(newLevel),
@@ -135,11 +171,11 @@ func SaveHistory(c *fiber.Ctx) error {
 			)
 		}
 
-		config.DB.Save(&user)
+		config.DB.Save(&currentUser)
 	}
 
 	// ----------------------------
-	// CEK ACHIEVEMENT SETELAH SELESAI
+	// CEK ACHIEVEMENT
 	// ----------------------------
 	go func() {
 		wg.Wait()
@@ -148,7 +184,6 @@ func SaveHistory(c *fiber.Ctx) error {
 
 	return utils.SuccessResponse(c, fiber.StatusCreated, "History saved", history)
 }
-
 func GetMyHistory(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 	var histories []models.History
