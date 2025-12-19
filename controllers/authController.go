@@ -254,6 +254,9 @@ func AuthMe(c *fiber.Ctx) error {
 		} else {
 			streakMessage += " Koin hari ini sudah diklaim."
 		}
+
+		currentHour := utils.GetJakartaTime().Hour()
+	utils.CheckDailyMissions(user.ID, "login", 0, strconv.Itoa(currentHour))
 		return utils.SuccessResponse(c, fiber.StatusOK, "User session refreshed", fiber.Map{
 			"token":          t,
 			"user":           user,
