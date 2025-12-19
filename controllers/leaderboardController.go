@@ -18,7 +18,7 @@ type LeaderboardEntry struct {
 
 func GetLeaderboardByTopic(c *fiber.Ctx) error {
 	slug := c.Params("slug")
-
+	userID := c.Locals("user_id").(float64)
 	var topic models.Topic
 	if err := config.DB.Where("slug = ?", slug).First(&topic).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Topic not found", nil)
@@ -50,6 +50,6 @@ func GetLeaderboardByTopic(c *fiber.Ctx) error {
 
 		results[i].EquippedItems = items
 	}
-
+	utils.CheckDailyMissions(uint(userID), "social", 1, "view")
 	return utils.SuccessResponse(c, fiber.StatusOK, "Leaderboard retrieved", results)
 }

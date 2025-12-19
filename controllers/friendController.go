@@ -95,7 +95,8 @@ func ConfirmFriend(c *fiber.Ctx) error {
 	if friendCount >= 3 {
 		utils.UnlockAchievement(uint(myID), 7)
 	}
-
+	utils.CheckDailyMissions(uint(myID), "social", 1, "add") // Yang menerima
+	utils.CheckDailyMissions(input.RequesterID, "social", 1, "add")   // Yang meminta
 	return utils.SuccessResponse(c, fiber.StatusOK, "Friend request accepted", nil)
 }
 

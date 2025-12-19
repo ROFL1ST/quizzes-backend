@@ -120,6 +120,7 @@ func SetupRoutes(app *fiber.App) {
 	userGroup.Get("/achievements", controllers.GetMyAchievements)
 	userGroup.Put("/me", controllers.UpdateProfile) // Ganti nama/password
 	userGroup.Get("/:username", controllers.GetUserProfile)
+	userGroup.Post("/share", controllers.ShareProfileTrigger)
 
 	// Shop Routes
 	shopGroup := api.Group("/shop", middleware.Protected())

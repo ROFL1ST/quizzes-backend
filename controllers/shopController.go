@@ -71,7 +71,7 @@ func BuyItem(c *fiber.Ctx) error {
 	}
 
 	tx.Commit()
-
+	utils.CheckDailyMissions(uint(userID), "shop", 1, "buy")
 	return utils.SuccessResponse(c, fiber.StatusOK, "Item purchased successfully", fiber.Map{
 		"coins_left": user.Coins,
 		"item":       item,
@@ -113,6 +113,6 @@ func EquipItem(c *fiber.Ctx) error {
 	// 3. Equip item yang baru dipilih
 	userItem.IsEquipped = true
 	config.DB.Save(&userItem)
-
+	utils.CheckDailyMissions(uint(userID), "shop", 1, "equip")
 	return utils.SuccessResponse(c, fiber.StatusOK, "Item equipped successfully", userItem.Item)
 }

@@ -208,6 +208,8 @@ func SaveHistory(c *fiber.Ctx) error {
 		utils.CheckQuizAchievements(history.UserID, history.Score)
 	}()
 
+	utils.CheckDailyMissions(currentUser.ID, "quiz", history.Score, history.QuizTitle)
+	utils.CheckDailyMissions(currentUser.ID, "level", history.Score, "")
 	return utils.SuccessResponse(c, fiber.StatusCreated, "History saved", history)
 }
 func GetMyHistory(c *fiber.Ctx) error {
