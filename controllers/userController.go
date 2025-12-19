@@ -347,3 +347,12 @@ func GetMyAchievements(c *fiber.Ctx) error {
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Achievements retrieved", response)
 }
+
+
+func ShareProfileTrigger(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(float64)
+
+	utils.CheckDailyMissions(uint(userID), "social", 1, "share")
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Share event recorded", nil)
+}

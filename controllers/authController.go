@@ -7,7 +7,7 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/utils"
 	"os"
 	"time"
-
+	"strconv"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -115,7 +115,8 @@ func LoginUser(c *fiber.Ctx) error {
 		streakMessage += " Koin hari ini sudah diklaim."
 	}
 	config.DB.Save(&user)
-
+	currentHour := utils.GetJakartaTime().Hour()
+	utils.CheckDailyMissions(user.ID, "login", 0, strconv.Itoa(currentHour))
 	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{
 		"token":          t,
 		"user":           user,
@@ -258,7 +259,7 @@ func AuthMe(c *fiber.Ctx) error {
 			"user":           user,
 			"role":           "user",
 			"equipped_items": equippedItems,
-			"streak_message":  streakMessage,
+			"streak_message": streakMessage,
 		})
 
 	} else {

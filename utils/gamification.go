@@ -4,14 +4,130 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"math"
+	"math/rand"
 	"strconv"
 	"time"
-	"math/rand"
 )
 
+func GetJakartaTime() time.Time {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+
+		loc = time.FixedZone("WIB", 7*60*60)
+	}
+	return time.Now().In(loc)
+}
+
 func StripTime(t time.Time) time.Time {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*60*60)
+	}
+
+	t = t.In(loc)
 	y, m, d := t.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, time.Local)
+	return time.Date(y, m, d, 0, 0, 0, 0, loc)
+}
+
+func CheckDailyMissions(userID uint, trigger string, val int, meta string) {
+	today := StripTime(GetJakartaTime()) // Waktu Jakarta
+
+	// 1. Ambil Misi Harian User yang Aktif Hari Ini & Belum Diklaim
+	var userMissions []models.UserMission
+	config.DB.Preload("Mission").
+		Where("user_id = ? AND reset_date = ? AND is_claimed = ?", userID, today, false).
+		Find(&userMissions)
+
+	for _, um := range userMissions {
+		key := um.Mission.Key
+		increment := 0
+
+		// 2. Logika Pencocokan Misi
+		switch trigger {
+		case "quiz":
+			// Misi: Mainkan Kuis
+			if key == "play_quiz_1" || key == "play_quiz_3" || key == "play_quiz_5" {
+				increment = 1
+			}
+			// Misi: Skor
+			if (key == "score_100" || key == "score_100_3x") && val == 100 {
+				increment = 1
+			}
+			if key == "total_score_500" {
+				increment = val // Tambah skor
+			}
+			if key == "perfect_streak" && val >= 10 {
+				increment = 10
+			}
+			// Misi Topik
+			if key == "quiz_math" && meta == "Matematika" {
+				increment = 1
+			}
+			if key == "quiz_history" && meta == "Sejarah" {
+				increment = 1
+			}
+
+		case "login":
+			// Cek Jam Login (Waktu Jakarta)
+			hour := GetJakartaTime().Hour()
+			if key == "login_morning" && hour >= 5 && hour < 10 {
+				increment = 1
+			}
+			if key == "login_night" && hour >= 20 && hour <= 23 {
+				increment = 1
+			}
+
+		case "shop":
+			if key == "buy_item" && meta == "buy" {
+				increment = 1
+			}
+			if key == "equip_avatar" && meta == "equip" {
+				increment = 1
+			}
+
+		case "social":
+			if key == "add_friend" && meta == "add" {
+				increment = 1
+			}
+			if key == "check_leaderboard" && meta == "view" {
+				increment = 1
+			}
+			if key == "share_app" && meta == "share" {
+				increment = 1
+			}
+
+		case "challenge":
+			if key == "win_challenge_1" && meta == "win" {
+				increment = 1
+			}
+			if key == "play_challenge_2v2" && meta == "2v2" {
+				increment = 1
+			}
+
+		case "level":
+			if key == "earn_xp_1000" {
+				increment = val // val = xp yang didapat
+			}
+			if key == "level_up_daily" {
+				increment = 1
+			}
+		}
+
+		// 3. Update Progress
+		if increment > 0 {
+			if um.Progress < um.Mission.Target {
+				um.Progress += increment
+				if um.Progress > um.Mission.Target {
+					um.Progress = um.Mission.Target
+				}
+				config.DB.Save(&um)
+
+				if um.Progress == um.Mission.Target {
+					SendNotification(userID, "success", "Misi Selesai!", "Kamu menyelesaikan misi: "+um.Mission.Title, "/daily")
+				}
+			}
+		}
+	}
 }
 
 func AssignDailyMissions(userID uint) {
@@ -23,13 +139,17 @@ func AssignDailyMissions(userID uint) {
 		Where("user_id = ? AND reset_date = ?", userID, today).
 		Count(&count)
 
-	if count > 0 { return } // Sudah ada, skip.
+	if count > 0 {
+		return
+	} // Sudah ada, skip.
 
 	// Ambil semua misi aktif
 	var allMissions []models.Mission
 	config.DB.Where("is_active = ?", true).Find(&allMissions)
 
-	if len(allMissions) == 0 { return }
+	if len(allMissions) == 0 {
+		return
+	}
 
 	// Acak (Shuffle)
 	rand.Seed(time.Now().UnixNano())
@@ -39,14 +159,16 @@ func AssignDailyMissions(userID uint) {
 
 	// Ambil 5 Teratas
 	limit := 5
-	if len(allMissions) < 5 { limit = len(allMissions) }
-	
+	if len(allMissions) < 5 {
+		limit = len(allMissions)
+	}
+
 	for i := 0; i < limit; i++ {
 		um := models.UserMission{
-			UserID: userID,
+			UserID:    userID,
 			MissionID: allMissions[i].ID,
 			ResetDate: today,
-			Progress: 0,
+			Progress:  0,
 		}
 		config.DB.Create(&um)
 	}
@@ -287,7 +409,7 @@ func DetermineWinner(challengeID uint) {
 
 	// Simpan Hasil ke Database
 	config.DB.Save(&challenge)
-	
+
 	// [UPDATED] Kirim Notifikasi ke user bahwa challenge selesai
 	for _, p := range challenge.Participants {
 		SendNotification(p.UserID, "info", "Challenge Selesai", "Kompetisi telah berakhir. Cek hasilnya sekarang!", "/challenges")
