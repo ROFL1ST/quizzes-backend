@@ -127,4 +127,10 @@ func SetupRoutes(app *fiber.App) {
 	shopGroup.Post("/buy", controllers.BuyItem)
 	shopGroup.Get("/inventory", controllers.GetMyInventory)
 	shopGroup.Post("/equip", controllers.EquipItem)
+
+	// daily routes
+	daily := api.Group("/daily", middleware.Protected())     
+	daily.Get("/info", controllers.GetDailyInfo)             
+	daily.Post("/claim-login", controllers.ClaimLoginReward) 
+	daily.Post("/claim-mission", controllers.ClaimMissionReward)
 }

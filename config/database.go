@@ -73,6 +73,10 @@ func ConnectDB() {
 		&models.Notification{},
 		&models.Item{},
 		&models.UserItem{},
+		&models.DailyClaim{},
+		&models.DailyRewardConfig{},
+		&models.Mission{},
+		&models.UserMission{},
 	)
 
 	if err != nil {

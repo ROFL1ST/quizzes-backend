@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 	"strconv"
 	"sync"
+	"time"
 )
 
 type CreateHistoryInput struct {
@@ -39,12 +40,48 @@ func SaveHistory(c *fiber.Ctx) error {
 		Score:     input.Score,
 		Snapshot:  datatypes.JSON(input.Snapshot),
 		TimeTaken: input.TimeTaken,
+		TotalSoal: input.TotalSoal,
 	}
 
 	// Simpan history ke Database
 	if err := config.DB.Create(&history).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed save history", err.Error())
 	}
+
+	go func(uid uint, score int) {
+	today := utils.StripTime(time.Now())
+
+	// 1. Ambil 5 Misi yang Aktif Hari Ini
+	var activeMissions []models.UserMission
+	config.DB.Preload("Mission").
+		Where("user_id = ? AND reset_date = ?", uid, today).
+		Find(&activeMissions)
+
+	for _, um := range activeMissions {
+		if um.IsClaimed { continue } // Skip jika sudah klaim
+
+		key := um.Mission.Key
+		shouldSave := false
+
+		// 2. Logic Update Progress
+		if key == "play_quiz_1" || key == "play_quiz_3" || key == "play_quiz_5" {
+			um.Progress++
+			shouldSave = true
+		} else if key == "score_100" && score == 100 {
+			um.Progress++
+			shouldSave = true
+		} else if key == "total_score_500" {
+			um.Progress += score
+			shouldSave = true
+		}
+
+		if shouldSave {
+			// Cap progress agar tidak melebihi target (opsional)
+			// if um.Progress > um.Mission.Target { um.Progress = um.Mission.Target }
+			config.DB.Save(&um)
+		}
+	}
+}(uint(userID), input.Score)
 
 	var currentUser models.User
 	if err := config.DB.First(&currentUser, uint(userID)).Error; err == nil {
@@ -59,9 +96,6 @@ func SaveHistory(c *fiber.Ctx) error {
 		}
 	}
 
-	// =================================================================
-	// LOGIC UPDATE CHALLENGE PARTICIPANT (ASYNC)
-	// =================================================================
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func(uid uint, qID uint, score int, timeTaken int, challengeID uint) {
@@ -87,7 +121,7 @@ func SaveHistory(c *fiber.Ctx) error {
 			// Update Status Partisipan
 			participant.Score = score
 			participant.TimeTaken = timeTaken
-			participant.IsFinished = true 
+			participant.IsFinished = true
 
 			config.DB.Save(&participant)
 
@@ -115,9 +149,6 @@ func SaveHistory(c *fiber.Ctx) error {
 		}
 	}(uint(userID), history.QuizID, history.Score, history.TimeTaken, input.ChallengeID)
 
-	// ----------------------------
-	// UPDATE QUESTION SNAPSHOT
-	// ----------------------------
 	go func(quizID uint, snapshotJSON []byte) {
 		var questions []models.Question
 		config.DB.Where("quiz_id = ?", quizID).Find(&questions)
@@ -144,9 +175,6 @@ func SaveHistory(c *fiber.Ctx) error {
 		}
 	}(history.QuizID, history.Snapshot)
 
-	// ----------------------------
-	// UPDATE XP USER (Menggunakan currentUser yang sudah diload di atas)
-	// ----------------------------
 	if currentUser.ID != 0 {
 		xpGained := history.Score
 		currentUser.XP += int64(xpGained)
@@ -174,9 +202,7 @@ func SaveHistory(c *fiber.Ctx) error {
 		config.DB.Save(&currentUser)
 	}
 
-	// ----------------------------
-	// CEK ACHIEVEMENT
-	// ----------------------------
+
 	go func() {
 		wg.Wait()
 		utils.CheckQuizAchievements(history.UserID, history.Score)
