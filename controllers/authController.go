@@ -258,7 +258,7 @@ func AuthMe(c *fiber.Ctx) error {
 			"user":           user,
 			"role":           "user",
 			"equipped_items": equippedItems,
-			streakMessage:    streakMessage,
+			"streak_message":  streakMessage,
 		})
 
 	} else {
