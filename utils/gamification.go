@@ -123,7 +123,7 @@ func CheckDailyMissions(userID uint, trigger string, val int, meta string) {
 				config.DB.Save(&um)
 
 				if um.Progress == um.Mission.Target {
-					SendNotification(userID, "success", "Misi Selesai!", "Kamu menyelesaikan misi: "+um.Mission.Title, "/daily")
+					SendNotification(userID, "success", "Misi Selesai!", "Kamu menyelesaikan misi: "+um.Mission.Title, "/")
 				}
 			}
 		}
