@@ -40,6 +40,7 @@ func SaveHistory(c *fiber.Ctx) error {
 		Score:     input.Score,
 		Snapshot:  datatypes.JSON(input.Snapshot),
 		TimeTaken: input.TimeTaken,
+		TotalSoal: input.TotalSoal,
 	}
 
 	// Simpan history ke Database
