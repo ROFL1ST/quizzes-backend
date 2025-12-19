@@ -109,30 +109,75 @@ func CreateChallenge(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusCreated, "Challenge created", challenge)
 }
 
+// controllers/socialController.go
+
+
 func GetMyChallenges(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 
-	var participants []models.ChallengeParticipant
-	// Ambil ID challenge dimana user terlibat
-	config.DB.Where("user_id = ?", userID).Find(&participants)
-
-	var challengeIDs []uint
-	for _, p := range participants {
-		challengeIDs = append(challengeIDs, p.ChallengeID)
-	}
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 10)
+	offset := (page - 1) * limit
 
 	var challenges []models.Challenge
-	if len(challengeIDs) > 0 {
-		config.DB.
-			Preload("Quiz").
-			Preload("Creator").
-			Preload("Participants.User"). // Load user detail tiap peserta
-			Where("id IN ?", challengeIDs).
-			Order("created_at DESC").
-			Find(&challenges)
+
+	// 1. QUERY UTAMA (Fix Table Name: participants -> challenge_participants)
+	err := config.DB.
+		Preload("Creator").
+		Preload("Quiz").
+		Preload("Participants.User").
+		// Ganti 'participants' dengan 'challenge_participants'
+		Joins("JOIN challenge_participants ON challenge_participants.challenge_id = challenges.id").
+		Where("challenge_participants.user_id = ?", userID).
+		Order("challenges.updated_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Distinct("challenges.id", "challenges.*").
+		Find(&challenges).Error
+
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch challenges", err.Error())
 	}
 
-	return utils.SuccessResponse(c, fiber.StatusOK, "Challenges retrieved", challenges)
+	stats := fiber.Map{
+		"total":    0,
+		"wins":     0,
+		"win_rate": 0,
+	}
+
+	// 2. HITUNG STATISTIK (Fix Table Name disini juga)
+	if page == 1 {
+		var totalPlayed int64
+		var totalWins int64
+
+		// A. Total Main
+		config.DB.Table("challenges").
+			Joins("JOIN challenge_participants ON challenge_participants.challenge_id = challenges.id").
+			Where("challenge_participants.user_id = ? AND challenges.status = ?", userID, "finished").
+			Count(&totalPlayed)
+
+		// B. Total Menang
+		config.DB.Table("challenges").
+			Joins("JOIN challenge_participants ON challenge_participants.challenge_id = challenges.id").
+			Where("challenge_participants.user_id = ? AND challenges.status = ?", userID, "finished").
+			Where("(challenges.winner_id = ? OR (challenges.mode = '2v2' AND challenges.winning_team = challenge_participants.team))", userID).
+			Count(&totalWins)
+
+		winRate := 0.0
+		if totalPlayed > 0 {
+			winRate = float64(totalWins) / float64(totalPlayed) * 100
+		}
+
+		stats["total"] = totalPlayed
+		stats["wins"] = totalWins
+		stats["win_rate"] = int(winRate)
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Challenges retrieved", fiber.Map{
+		"list":     challenges,
+		"stats":    stats,
+		"has_more": len(challenges) == limit,
+	})
 }
 
 func AcceptChallenge(c *fiber.Ctx) error {
@@ -323,11 +368,11 @@ func formatParticipants(parts []models.ChallengeParticipant) []map[string]interf
 			"user_id": p.UserID,
 			"name":    p.User.Name,
 			"status":  p.Status,
-			"team":    p.Team, 
+			"team":    p.Team,
 		})
 	}
 	return result
-}	
+}
 
 type ProgressInput struct {
 	CurrentIndex int `json:"current_index"`
