@@ -173,5 +173,5 @@ func ClaimMissionReward(c *fiber.Ctx) error {
 	user.Coins += um.Mission.Reward
 	config.DB.Save(&user)
 
-	return utils.SuccessResponse(c, fiber.StatusOK, "Mission claimed", fiber.Map{"new_coins": user.Coins})
+	return utils.SuccessResponse(c, fiber.StatusOK, "Mission claimed", fiber.Map{"new_coins": user.Coins, "reward": um.Mission.Reward})
 }
