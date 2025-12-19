@@ -52,7 +52,7 @@ func LoginUser(c *fiber.Ctx) error {
 
 	var user models.User
 	if err := config.DB.Preload("UserItems.Item").Where("username = ?", input.Username).First(&user).Error; err != nil {
-		
+
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 	}
 	if user.ID == 0 {
@@ -71,51 +71,55 @@ func LoginUser(c *fiber.Ctx) error {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	t, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 	now := time.Now()
-	coinsGained := 0
 	streakMessage := ""
 
 	if user.LastActivityDate != nil {
-		diff := now.Sub(*user.LastActivityDate).Hours()
 
-		if diff >= 24 && diff < 48 {
-			// Login hari berikutnya (Streak Lanjut!)
-			user.StreakCount++
+		last := *user.LastActivityDate
+		y1, m1, d1 := last.Date()
+		y2, m2, d2 := now.Date()
 
-			// Rumus: 10 Koin + (Streak * 5). Maksimal bonus harian 100.
-			bonus := user.StreakCount * 5
-			if bonus > 50 {
-				bonus = 50
-			}
-			coinsGained = 10 + bonus
+		dateLast := time.Date(y1, m1, d1, 0, 0, 0, 0, time.Local)
+		dateNow := time.Date(y2, m2, d2, 0, 0, 0, 0, time.Local)
 
-			streakMessage = fmt.Sprintf("Streak x%d! Kamu dapat %d Koin.", user.StreakCount, coinsGained)
+		daysDiff := int(dateNow.Sub(dateLast).Hours() / 24)
 
-		} else if diff >= 48 {
+		if daysDiff == 1 {
 
-			user.StreakCount = 1
-			coinsGained = 10
-			streakMessage = "Streak terputus. Mulai lagi dari hari ke-1."
+			newStreak := user.StreakCount + 1
+			streakMessage = fmt.Sprintf("🔥 Streak Lanjut! Hari ke-%d.", newStreak)
+		} else if daysDiff > 1 {
+			streakMessage = "😢 Streak terputus. Mulai lagi dari hari ke-1."
 		} else {
-
-			coinsGained = 0
+			streakMessage = fmt.Sprintf("🔥 Streak Hari ke-%d aman.", user.StreakCount)
 		}
 	} else {
-
-		user.StreakCount = 1
-		coinsGained = 50
-		streakMessage = "Selamat datang! Bonus awal 50 Koin."
+		streakMessage = "👋 Selamat datang! Streak hari ke-1 dimulai."
 	}
 
-	// Simpan perubahan
-	user.Coins += coinsGained
-	user.LastActivityDate = &now
+	utils.UpdateStreak(&user)
+
+	config.DB.Omit("UserItems").Save(&user)
+
+	y, m, d := now.Date()
+	todayStripped := time.Date(y, m, d, 0, 0, 0, 0, time.Local)
+
+	var claimedCount int64
+	config.DB.Model(&models.DailyClaim{}).
+		Where("user_id = ? AND reward_type = ? AND claimed_date = ?", user.ID, "login", todayStripped).
+		Count(&claimedCount)
+
+	if claimedCount == 0 {
+		streakMessage += " Jangan lupa klaim Koin di menu Daily Reward!"
+	} else {
+		streakMessage += " Koin hari ini sudah diklaim."
+	}
 	config.DB.Save(&user)
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{
 		"token":          t,
 		"user":           user,
 		"streak_message": streakMessage,
-		"coins_gained":   coinsGained,
 	})
 }
 
@@ -206,11 +210,55 @@ func AuthMe(c *fiber.Ctx) error {
 			Where("user_items.user_id = ? AND user_items.is_equipped = ?", user.ID, true).
 			Find(&equippedItems)
 
+		streakMessage := ""
+
+		if user.LastActivityDate != nil {
+
+			last := *user.LastActivityDate
+			y1, m1, d1 := last.Date()
+			y2, m2, d2 := now.Date()
+
+			dateLast := time.Date(y1, m1, d1, 0, 0, 0, 0, time.Local)
+			dateNow := time.Date(y2, m2, d2, 0, 0, 0, 0, time.Local)
+
+			daysDiff := int(dateNow.Sub(dateLast).Hours() / 24)
+
+			if daysDiff == 1 {
+
+				newStreak := user.StreakCount + 1
+				streakMessage = fmt.Sprintf("🔥 Streak Lanjut! Hari ke-%d.", newStreak)
+			} else if daysDiff > 1 {
+				streakMessage = "😢 Streak terputus. Mulai lagi dari hari ke-1."
+			} else {
+				streakMessage = fmt.Sprintf("🔥 Streak Hari ke-%d aman.", user.StreakCount)
+			}
+		} else {
+			streakMessage = "👋 Selamat datang! Streak hari ke-1 dimulai."
+		}
+
+		utils.UpdateStreak(&user)
+
+		config.DB.Omit("UserItems").Save(&user)
+
+		y, m, d := now.Date()
+		todayStripped := time.Date(y, m, d, 0, 0, 0, 0, time.Local)
+
+		var claimedCount int64
+		config.DB.Model(&models.DailyClaim{}).
+			Where("user_id = ? AND reward_type = ? AND claimed_date = ?", user.ID, "login", todayStripped).
+			Count(&claimedCount)
+
+		if claimedCount == 0 {
+			streakMessage += " Jangan lupa klaim Koin di menu Daily Reward!"
+		} else {
+			streakMessage += " Koin hari ini sudah diklaim."
+		}
 		return utils.SuccessResponse(c, fiber.StatusOK, "User session refreshed", fiber.Map{
 			"token":          t,
 			"user":           user,
 			"role":           "user",
 			"equipped_items": equippedItems,
+			streakMessage:    streakMessage,
 		})
 
 	} else {

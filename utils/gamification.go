@@ -6,7 +6,51 @@ import (
 	"math"
 	"strconv"
 	"time"
+	"math/rand"
 )
+
+func StripTime(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.Local)
+}
+
+func AssignDailyMissions(userID uint) {
+	today := StripTime(time.Now())
+
+	// Cek apakah user sudah punya misi hari ini?
+	var count int64
+	config.DB.Model(&models.UserMission{}).
+		Where("user_id = ? AND reset_date = ?", userID, today).
+		Count(&count)
+
+	if count > 0 { return } // Sudah ada, skip.
+
+	// Ambil semua misi aktif
+	var allMissions []models.Mission
+	config.DB.Where("is_active = ?", true).Find(&allMissions)
+
+	if len(allMissions) == 0 { return }
+
+	// Acak (Shuffle)
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(allMissions), func(i, j int) {
+		allMissions[i], allMissions[j] = allMissions[j], allMissions[i]
+	})
+
+	// Ambil 5 Teratas
+	limit := 5
+	if len(allMissions) < 5 { limit = len(allMissions) }
+	
+	for i := 0; i < limit; i++ {
+		um := models.UserMission{
+			UserID: userID,
+			MissionID: allMissions[i].ID,
+			ResetDate: today,
+			Progress: 0,
+		}
+		config.DB.Create(&um)
+	}
+}
 
 func UnlockAchievement(userID uint, achievementID uint) {
 	var count int64

@@ -14,6 +14,7 @@ func main() {
 	config.SeedExamData()
 	config.SeedAchievements()
 	config.SeedShopItems()
+	config.SeedDailyData()
 	// config.MigrateOldChallenges()
 	app := fiber.New()
 
