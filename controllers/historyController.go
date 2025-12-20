@@ -35,7 +35,7 @@ func SaveHistory(c *fiber.Ctx) error {
 	}
 
 	// =================================================================
-	// 1. LOGIKA PENILAIAN (GRADING) - DILAKUKAN SEBELUM SIMPAN DB
+	// 1. LOGIKA PENILAIAN (GRADING)
 	// =================================================================
 	var questions []models.Question
 	if err := config.DB.Where("quiz_id = ?", input.QuizID).Find(&questions).Error; err != nil {
@@ -71,8 +71,6 @@ func SaveHistory(c *fiber.Ctx) error {
 				}
 
 			case "multi_select":
-				// Format jawaban multi_select di DB snapshot adalah JSON String
-				// Parsing JSON String ke Array lalu bandingkan isinya
 				var userAns []string
 				var correctAns []string
 
@@ -120,14 +118,11 @@ func SaveHistory(c *fiber.Ctx) error {
 		finalScore = int(math.Round(float64(correctCount) / float64(totalQuestions) * 100))
 	}
 
-	// =================================================================
-	// 2. SIMPAN HISTORY KE DATABASE
-	// =================================================================
 	history := models.History{
 		UserID:    uint(userID),
 		QuizID:    input.QuizID,
 		QuizTitle: input.QuizTitle,
-		Score:     finalScore, // Gunakan hasil hitungan backend
+		Score:     finalScore,
 		Snapshot:  datatypes.JSON(input.Snapshot),
 		TimeTaken: input.TimeTaken,
 		TotalSoal: totalQuestions,
@@ -137,9 +132,7 @@ func SaveHistory(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed save history", err.Error())
 	}
 
-	// =================================================================
-	// 3. BACKGROUND TASKS (Misi, Challenge, Notif, Stats)
-	// =================================================================
+
 
 	// A. Update Misi Harian
 	go func(uid uint, score int) {
@@ -174,7 +167,7 @@ func SaveHistory(c *fiber.Ctx) error {
 
 	var currentUser models.User
 	if err := config.DB.First(&currentUser, uint(userID)).Error; err == nil {
-		// Broadcast Lobby (Realtime)
+		// Broadcast Lobby (Realtime) - Memberitahu pemain lain bahwa user ini selesai
 		if input.ChallengeID != 0 {
 			utils.BroadcastLobby(input.ChallengeID, "player_finished", fiber.Map{
 				"user_id":  userID,
@@ -188,55 +181,58 @@ func SaveHistory(c *fiber.Ctx) error {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	// B. Update Challenge Status
-	go func(uid uint, qID uint, score int, timeTaken int, challengeID uint) {
+	// B. Update Challenge Status (Hanya jika ChallengeID Valid)
+	go func(uid uint, score int, timeTaken int, challengeID uint) {
 		defer wg.Done()
-		var participant models.ChallengeParticipant
-		var err error
 
-		if challengeID != 0 {
-			err = config.DB.Where("challenge_id = ? AND user_id = ?", challengeID, uid).First(&participant).Error
-		} else {
-			err = config.DB.Table("challenge_participants").
-				Joins("JOIN challenges ON challenges.id = challenge_participants.challenge_id").
-				Where("challenge_participants.user_id = ? AND challenges.quiz_id = ? AND challenges.status = 'active'", uid, qID).
-				Order("challenges.created_at DESC").
-				Select("challenge_participants.*").
-				First(&participant).Error
+		if challengeID == 0 {
+			return 
 		}
 
-		if err == nil {
-			participant.Score = score
-			participant.TimeTaken = timeTaken
-			participant.IsFinished = true
-			config.DB.Save(&participant)
+		var participant models.ChallengeParticipant
+		
+		// Cari partisipan spesifik untuk challenge ini
+		if err := config.DB.Where("challenge_id = ? AND user_id = ?", challengeID, uid).First(&participant).Error; err != nil {
+			return // Data partisipan tidak ditemukan, abaikan
+		}
 
-			var challenge models.Challenge
-			if err := config.DB.Preload("Participants").First(&challenge, participant.ChallengeID).Error; err == nil {
-				allFinished := true
-				for _, p := range challenge.Participants {
-					if p.Status == "accepted" && !p.IsFinished {
+		// Update Score & Status Selesai User Ini
+		participant.Score = score
+		participant.TimeTaken = timeTaken
+		participant.IsFinished = true
+		config.DB.Save(&participant)
+
+		// Cek apakah SEMUA peserta (accepted) sudah selesai?
+		var challenge models.Challenge
+		if err := config.DB.Preload("Participants").First(&challenge, challengeID).Error; err == nil {
+			allFinished := true
+			
+			// Loop semua peserta
+			for _, p := range challenge.Participants {
+				// Hanya cek yang sudah ACCEPT challenge (yang pending/reject ga dihitung)
+				if p.Status == "accepted" {
+					if !p.IsFinished {
 						allFinished = false
 						break
 					}
 				}
-				if allFinished {
-					challenge.Status = "finished"
-					config.DB.Save(&challenge)
-					utils.DetermineWinner(challenge.ID)
-				}
+			}
+
+			// Jika semua sudah selesai, tutup challenge & tentukan pemenang
+			if allFinished {
+				challenge.Status = "finished"
+				config.DB.Save(&challenge)
+				utils.DetermineWinner(challenge.ID)
 			}
 		}
-	}(uint(userID), history.QuizID, finalScore, history.TimeTaken, input.ChallengeID)
+	}(uint(userID), finalScore, history.TimeTaken, input.ChallengeID)
 
-	// C. Update Statistik Soal (Hanya update count, karena penilaian sudah dilakukan di awal)
-	// Kita ulangi loop penilaian ringan khusus untuk update statistik DB
+	// C. Update Statistik Soal
 	go func(qMap map[uint]models.Question, uAns map[string]string) {
 		for qIDStr, answer := range uAns {
 			qID, _ := strconv.Atoi(qIDStr)
 			if q, exists := qMap[uint(qID)]; exists {
 				isCorrect := false
-				// Reuse logic yang sama
 				switch q.Type {
 				case "short_answer":
 					if strings.ToLower(strings.TrimSpace(answer)) == strings.ToLower(strings.TrimSpace(q.CorrectAnswer)) { isCorrect = true }
@@ -286,7 +282,6 @@ func SaveHistory(c *fiber.Ctx) error {
 	}()
 
 	utils.CheckDailyMissions(currentUser.ID, "quiz", finalScore, history.QuizTitle)
-	// Trigger misi XP
 	utils.CheckDailyMissions(currentUser.ID, "level", finalScore, "xp_gain")
 
 	return utils.SuccessResponse(c, fiber.StatusCreated, "History saved", history)

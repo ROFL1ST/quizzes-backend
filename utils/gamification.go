@@ -326,42 +326,41 @@ func CalculateMinXPForLevel(level int) int64 {
 
 func DetermineWinner(challengeID uint) {
 	var challenge models.Challenge
-	// Load participants untuk hitung skor
 	if err := config.DB.Preload("Participants").First(&challenge, challengeID).Error; err != nil {
 		return
 	}
 
-	// Reset dulu status pemenang
 	challenge.WinnerID = nil
 	challenge.WinningTeam = ""
 
 	if challenge.Mode == "2v2" {
-		// --- LOGIC 2V2 (TEAM BASED) ---
+		// --- LOGIC 2V2 ---
 		scoreA, timeA := 0, 0
 		scoreB, timeB := 0, 0
+		countA, countB := 0, 0 // Hitung jumlah pemain yang selesai per tim
 
 		for _, p := range challenge.Participants {
-			// Hanya hitung peserta yang main (Accepted & Score valid)
-			if p.Status != "accepted" || p.Score == -1 {
-				continue
-			}
-
-			if p.Team == "A" {
-				scoreA += p.Score
-				timeA += p.TimeTaken
-			} else if p.Team == "B" {
-				scoreB += p.Score
-				timeB += p.TimeTaken
+			if p.Status == "accepted" && p.IsFinished {
+				if p.Team == "A" {
+					scoreA += p.Score
+					timeA += p.TimeTaken
+					countA++
+				} else if p.Team == "B" {
+					scoreB += p.Score
+					timeB += p.TimeTaken
+					countB++
+				}
 			}
 		}
 
-		// Bandingkan Skor Tim Total
+		// Opsional: Validasi minimal pemain selesai (misal harus ada 1 per tim)
+		// if countA == 0 || countB == 0 { return } 
+
 		if scoreA > scoreB {
 			challenge.WinningTeam = "A"
 		} else if scoreB > scoreA {
 			challenge.WinningTeam = "B"
 		} else {
-			// Jika Seri Skor, Cek Waktu Total (Lebih cepat/kecil menang)
 			if timeA < timeB {
 				challenge.WinningTeam = "A"
 			} else if timeB < timeA {
@@ -372,47 +371,36 @@ func DetermineWinner(challengeID uint) {
 		}
 
 	} else {
-		// --- LOGIC BATTLE ROYALE & 1V1 (INDIVIDUAL) ---
-		// Pemenang ditentukan berdasarkan:
-		// 1. Poin Tertinggi (Score)
-		// 2. Waktu Tercepat (TimeTaken) - Jika poin sama
-
+		// --- LOGIC BATTLE ROYALE / 1V1 ---
 		var winnerID uint = 0
 		highestScore := -1
-		lowestTime := 999999999 // Inisialisasi dengan angka besar
+		lowestTime := 999999999
 
 		for _, p := range challenge.Participants {
-			// Hanya hitung peserta yang main
-			if p.Status != "accepted" || p.Score == -1 {
-				continue
-			}
-
-			// Cek Poin
-			if p.Score > highestScore {
-				// Found new highest score
-				highestScore = p.Score
-				lowestTime = p.TimeTaken
-				winnerID = p.UserID
-			} else if p.Score == highestScore {
-				// Jika Poin sama, cek siapa lebih cepat (TimeTaken lebih kecil)
-				if p.TimeTaken < lowestTime {
+			// Hanya hitung yang Accepted dan Sudah Selesai
+			if p.Status == "accepted" && p.IsFinished {
+				if p.Score > highestScore {
+					highestScore = p.Score
 					lowestTime = p.TimeTaken
 					winnerID = p.UserID
+				} else if p.Score == highestScore {
+					if p.TimeTaken < lowestTime {
+						lowestTime = p.TimeTaken
+						winnerID = p.UserID
+					}
 				}
 			}
 		}
 
-		// Simpan ID Pemenang jika ada
 		if winnerID != 0 {
 			challenge.WinnerID = &winnerID
 		}
 	}
 
-	// Simpan Hasil ke Database
 	config.DB.Save(&challenge)
 
-	// [UPDATED] Kirim Notifikasi ke user bahwa challenge selesai
+	// Broadcast Notif Pemenang
 	for _, p := range challenge.Participants {
-		SendNotification(p.UserID, "info", "Challenge Selesai", "Kompetisi telah berakhir. Cek hasilnya sekarang!", "/challenges")
+		SendNotification(p.UserID, "info", "Challenge Selesai", "Pemenang telah ditentukan!", "/challenges")
 	}
 }
