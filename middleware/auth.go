@@ -10,6 +10,10 @@ import (
 
 func Protected() fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if c.Method() == "OPTIONS" {
+			return c.Next()
+		}
+
 		var tokenString string
 
 		authHeader := c.Get("Authorization")
@@ -18,7 +22,7 @@ func Protected() fiber.Handler {
 		}
 
 		if tokenString == "" {
-			tokenString = c.Cookies("token") 
+			tokenString = c.Cookies("token")
 		}
 
 		// if tokenString == "" {
