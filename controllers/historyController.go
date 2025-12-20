@@ -8,12 +8,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"sort"
-	"math"
 )
 
 type CreateHistoryInput struct {
@@ -81,7 +81,7 @@ func SaveHistory(c *fiber.Ctx) error {
 					if len(userAns) == len(correctAns) {
 						sort.Strings(userAns)
 						sort.Strings(correctAns)
-						
+
 						match := true
 						for i := range userAns {
 							if userAns[i] != correctAns[i] {
@@ -132,8 +132,6 @@ func SaveHistory(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed save history", err.Error())
 	}
 
-
-
 	// A. Update Misi Harian
 	go func(uid uint, score int) {
 		today := utils.StripTime(time.Now())
@@ -143,8 +141,10 @@ func SaveHistory(c *fiber.Ctx) error {
 			Find(&activeMissions)
 
 		for _, um := range activeMissions {
-			if um.IsClaimed { continue }
-			
+			if um.IsClaimed {
+				continue
+			}
+
 			key := um.Mission.Key
 			shouldSave := false
 
@@ -186,11 +186,11 @@ func SaveHistory(c *fiber.Ctx) error {
 		defer wg.Done()
 
 		if challengeID == 0 {
-			return 
+			return
 		}
 
 		var participant models.ChallengeParticipant
-		
+
 		// Cari partisipan spesifik untuk challenge ini
 		if err := config.DB.Where("challenge_id = ? AND user_id = ?", challengeID, uid).First(&participant).Error; err != nil {
 			return // Data partisipan tidak ditemukan, abaikan
@@ -206,7 +206,7 @@ func SaveHistory(c *fiber.Ctx) error {
 		var challenge models.Challenge
 		if err := config.DB.Preload("Participants").First(&challenge, challengeID).Error; err == nil {
 			allFinished := true
-			
+
 			// Loop semua peserta
 			for _, p := range challenge.Participants {
 				// Hanya cek yang sudah ACCEPT challenge (yang pending/reject ga dihitung)
@@ -235,19 +235,31 @@ func SaveHistory(c *fiber.Ctx) error {
 				isCorrect := false
 				switch q.Type {
 				case "short_answer":
-					if strings.ToLower(strings.TrimSpace(answer)) == strings.ToLower(strings.TrimSpace(q.CorrectAnswer)) { isCorrect = true }
+					if strings.ToLower(strings.TrimSpace(answer)) == strings.ToLower(strings.TrimSpace(q.CorrectAnswer)) {
+						isCorrect = true
+					}
 				case "multi_select":
 					var ua, ca []string
 					json.Unmarshal([]byte(answer), &ua)
 					json.Unmarshal([]byte(q.CorrectAnswer), &ca)
 					if len(ua) == len(ca) {
-						sort.Strings(ua); sort.Strings(ca)
+						sort.Strings(ua)
+						sort.Strings(ca)
 						match := true
-						for i := range ua { if ua[i] != ca[i] { match = false; break } }
-						if match { isCorrect = true }
+						for i := range ua {
+							if ua[i] != ca[i] {
+								match = false
+								break
+							}
+						}
+						if match {
+							isCorrect = true
+						}
 					}
 				default:
-					if answer == q.CorrectAnswer { isCorrect = true }
+					if answer == q.CorrectAnswer {
+						isCorrect = true
+					}
 				}
 
 				if isCorrect {
@@ -288,9 +300,44 @@ func SaveHistory(c *fiber.Ctx) error {
 }
 func GetMyHistory(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
+
+	params := utils.GetPaginationParams(c)
+
 	var histories []models.History
-	config.DB.Preload("User").Where("user_id = ?", userID).Order("created_at desc").Find(&histories)
-	return utils.SuccessResponse(c, fiber.StatusOK, "History retrieved", histories)
+	var total int64
+
+	query := config.DB.Model(&models.History{}).Where("user_id = ?", userID)
+
+	if err := query.Count(&total).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to count history", err.Error())
+	}
+
+	var avgScore float64
+
+	if err := config.DB.Model(&models.History{}).
+		Where("user_id = ?", userID).
+		Select("COALESCE(AVG(score), 0)").
+		Scan(&avgScore).Error; err != nil {
+		avgScore = 0
+	}
+
+	if err := query.Preload("User").
+		Order("created_at desc").
+		Offset(params.Offset).
+		Limit(params.PageSize).
+		Find(&histories).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch history", err.Error())
+	}
+
+	responseData := fiber.Map{
+		"list": histories,
+		"stats": fiber.Map{
+			"total_quiz":    total,
+			"average_score": int(math.Round(avgScore)),
+		},
+	}
+
+	return utils.PaginatedSuccessResponse(c, fiber.StatusOK, "History retrieved", responseData, total, params)
 }
 
 func GetHistoryByID(c *fiber.Ctx) error {
