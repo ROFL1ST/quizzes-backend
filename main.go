@@ -19,8 +19,9 @@ func main() {
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "https://kuis-imk.vercel.app, https://planetpulse-admin-gwcx.vercel.app/, http://localhost:5173/, http://localhost:3000",
+		AllowOrigins: "https://kuis-imk.vercel.app, https://planetpulse-admin-gwcx.vercel.app, http://localhost:5173, http://localhost:3000",
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowCredentials: true,
 	}))
 
 	routes.SetupRoutes(app)

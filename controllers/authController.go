@@ -5,12 +5,12 @@ import (
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
-	"os"
-	"time"
-	"strconv"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"os"
+	"strconv"
+	"time"
 )
 
 func RegisterUser(c *fiber.Ctx) error {
@@ -51,8 +51,7 @@ func LoginUser(c *fiber.Ctx) error {
 	}
 
 	var user models.User
-	if err := config.DB.Preload("UserItems.Item").Where("username = ?", input.Username).First(&user).Error; err != nil {
-
+	if err := config.DB.Preload("UserItems", "is_equipped = ?", true).Preload("UserItems.Item").Where("username = ?", input.Username).First(&user).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 	}
 	if user.ID == 0 {
@@ -188,8 +187,7 @@ func AuthMe(c *fiber.Ctx) error {
 	if role == "user" {
 
 		var user models.User
-
-		if err := config.DB.Preload("UserItems.Item").First(&user, userID).Error; err != nil {
+		if err := config.DB.Preload("UserItems", "is_equipped = ?", true).Preload("UserItems.Item").First(&user, userID).Error; err != nil {
 			return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 		}
 
@@ -256,7 +254,7 @@ func AuthMe(c *fiber.Ctx) error {
 		}
 
 		currentHour := utils.GetJakartaTime().Hour()
-	utils.CheckDailyMissions(user.ID, "login", 0, strconv.Itoa(currentHour))
+		utils.CheckDailyMissions(user.ID, "login", 0, strconv.Itoa(currentHour))
 		return utils.SuccessResponse(c, fiber.StatusOK, "User session refreshed", fiber.Map{
 			"token":          t,
 			"user":           user,

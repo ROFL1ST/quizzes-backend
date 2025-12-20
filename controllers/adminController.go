@@ -2,14 +2,15 @@ package controllers
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
-	"strconv"
-
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/lib/pq"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -288,19 +289,26 @@ func GetAllQuestionsAdmin(c *fiber.Ctx) error {
 	var questions []models.Question
 	var total int64
 
-	// Filter berdasarkan quiz_id jika ada
+	// Query Dasar
 	query := config.DB.Model(&models.Question{})
 
-	if quizID := c.Query("quiz_id"); quizID != "" {
+	// 1. Filter by Quiz ID (Jika ada)
+	if quizID := c.Query("quiz_id"); quizID != "" && quizID != "0" {
 		query = query.Where("quiz_id = ?", quizID)
 	}
 
-	// Hitung total data
+	// 2. Filter by Search Keyword (Pertanyaan)
+	if key := c.Query("key"); key != "" {
+		search := "%" + strings.ToLower(key) + "%"
+		query = query.Where("LOWER(question_text) LIKE ?", search)
+	}
+
+	// Hitung Total Data (setelah filter)
 	if err := query.Count(&total).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to count questions", nil)
 	}
 
-	// Ambil data dengan pagination
+	// Ambil Data dengan Pagination
 	if err := query.
 		Preload("Quiz").
 		Order("created_at desc").
@@ -370,16 +378,59 @@ func BulkUploadQuestions(c *fiber.Ctx) error {
 			continue
 		}
 
-		if len(row) < 6 {
+		if len(row) < 5 {
 			continue
+		}
+
+		// Kolom CSV:
+		// 0: Question
+		// 1: Type (mcq, short_answer, boolean, multi_select)
+		// 2: Options (dipisah koma, misal: "A,B,C")
+		// 3: CorrectAnswer
+		// 4: Hint
+
+		qType := strings.TrimSpace(strings.ToLower(row[1]))
+		if qType == "" {
+			qType = "mcq"
+		}
+
+		var options []string
+
+		// Logic Opsi Berdasarkan Tipe
+		if qType == "boolean" {
+			options = []string{"Benar", "Salah"}
+		} else if qType == "short_answer" {
+			options = []string{} // Kosongkan opsi
+		} else {
+			// Untuk MCQ & Multi Select, split string opsi berdasarkan koma
+			if row[2] != "" {
+				rawOpts := strings.Split(row[2], ",")
+				for _, o := range rawOpts {
+					options = append(options, strings.TrimSpace(o))
+				}
+			}
+		}
+
+		// Logic Jawaban Benar
+		correct := row[3]
+		// Jika Multi Select, pastikan formatnya JSON String array jika belum
+		// (User di CSV mungkin nulis "A, B". Kita ubah jadi '["A","B"]')
+		if qType == "multi_select" && !strings.HasPrefix(correct, "[") {
+			answers := strings.Split(correct, ",")
+			for j := range answers {
+				answers[j] = strings.TrimSpace(answers[j])
+			}
+			jsonBytes, _ := json.Marshal(answers)
+			correct = string(jsonBytes)
 		}
 
 		q := models.Question{
 			QuizID:        uint(quizID),
 			QuestionText:  row[0],
-			Options:       pq.StringArray{row[1], row[2], row[3], row[4]},
-			CorrectAnswer: row[5],
-			Hint:          row[6],
+			Type:          qType,
+			Options:       pq.StringArray(options),
+			CorrectAnswer: correct,
+			Hint:          row[4],
 		}
 		questions = append(questions, q)
 	}
