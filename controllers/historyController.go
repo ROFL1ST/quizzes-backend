@@ -312,6 +312,15 @@ func GetMyHistory(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to count history", err.Error())
 	}
 
+	var avgScore float64
+
+	if err := config.DB.Model(&models.History{}).
+		Where("user_id = ?", userID).
+		Select("COALESCE(AVG(score), 0)").
+		Scan(&avgScore).Error; err != nil {
+		avgScore = 0
+	}
+
 	if err := query.Preload("User").
 		Order("created_at desc").
 		Offset(params.Offset).
@@ -320,7 +329,15 @@ func GetMyHistory(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch history", err.Error())
 	}
 
-	return utils.PaginatedSuccessResponse(c, fiber.StatusOK, "History retrieved", histories, total, params)
+	responseData := fiber.Map{
+		"list": histories,
+		"stats": fiber.Map{
+			"total_quiz":    total,
+			"average_score": int(math.Round(avgScore)),
+		},
+	}
+
+	return utils.PaginatedSuccessResponse(c, fiber.StatusOK, "History retrieved", responseData, total, params)
 }
 
 func GetHistoryByID(c *fiber.Ctx) error {
