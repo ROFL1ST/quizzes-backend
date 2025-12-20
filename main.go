@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/gofiber/fiber/v2/middleware/logger"
+
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/routes"
 
@@ -22,6 +24,13 @@ func main() {
 		AllowOrigins: "https://kuis-imk.vercel.app, https://planetpulse-admin-gwcx.vercel.app, http://localhost:5173, http://localhost:3000",
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
+	}))
+
+	app.Use(logger.New(logger.Config{
+		// Format log custom (optional), defaultnya juga sudah bagus
+		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
+		TimeFormat: "2006-01-02 15:04:05",
+		TimeZone:   "Asia/Jakarta",
 	}))
 
 	routes.SetupRoutes(app)
