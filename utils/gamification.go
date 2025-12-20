@@ -106,9 +106,10 @@ func CheckDailyMissions(userID uint, trigger string, val int, meta string) {
 
 		case "level":
 			if key == "earn_xp_1000" {
-				increment = val // val = xp yang didapat
+				increment = val
 			}
-			if key == "level_up_daily" {
+
+			if key == "level_up_daily" && meta == "levelup" {
 				increment = 1
 			}
 		}

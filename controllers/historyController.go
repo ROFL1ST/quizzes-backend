@@ -49,39 +49,41 @@ func SaveHistory(c *fiber.Ctx) error {
 	}
 
 	go func(uid uint, score int) {
-	today := utils.StripTime(time.Now())
+		today := utils.StripTime(time.Now())
 
-	// 1. Ambil 5 Misi yang Aktif Hari Ini
-	var activeMissions []models.UserMission
-	config.DB.Preload("Mission").
-		Where("user_id = ? AND reset_date = ?", uid, today).
-		Find(&activeMissions)
+		// 1. Ambil 5 Misi yang Aktif Hari Ini
+		var activeMissions []models.UserMission
+		config.DB.Preload("Mission").
+			Where("user_id = ? AND reset_date = ?", uid, today).
+			Find(&activeMissions)
 
-	for _, um := range activeMissions {
-		if um.IsClaimed { continue } // Skip jika sudah klaim
+		for _, um := range activeMissions {
+			if um.IsClaimed {
+				continue
+			} // Skip jika sudah klaim
 
-		key := um.Mission.Key
-		shouldSave := false
+			key := um.Mission.Key
+			shouldSave := false
 
-		// 2. Logic Update Progress
-		if key == "play_quiz_1" || key == "play_quiz_3" || key == "play_quiz_5" {
-			um.Progress++
-			shouldSave = true
-		} else if key == "score_100" && score == 100 {
-			um.Progress++
-			shouldSave = true
-		} else if key == "total_score_500" {
-			um.Progress += score
-			shouldSave = true
+			// 2. Logic Update Progress
+			if key == "play_quiz_1" || key == "play_quiz_3" || key == "play_quiz_5" {
+				um.Progress++
+				shouldSave = true
+			} else if key == "score_100" && score == 100 {
+				um.Progress++
+				shouldSave = true
+			} else if key == "total_score_500" {
+				um.Progress += score
+				shouldSave = true
+			}
+
+			if shouldSave {
+				// Cap progress agar tidak melebihi target (opsional)
+				// if um.Progress > um.Mission.Target { um.Progress = um.Mission.Target }
+				config.DB.Save(&um)
+			}
 		}
-
-		if shouldSave {
-			// Cap progress agar tidak melebihi target (opsional)
-			// if um.Progress > um.Mission.Target { um.Progress = um.Mission.Target }
-			config.DB.Save(&um)
-		}
-	}
-}(uint(userID), input.Score)
+	}(uint(userID), input.Score)
 
 	var currentUser models.User
 	if err := config.DB.First(&currentUser, uint(userID)).Error; err == nil {
@@ -197,11 +199,11 @@ func SaveHistory(c *fiber.Ctx) error {
 				"⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(newLevel),
 				"/profile",
 			)
+			utils.CheckDailyMissions(currentUser.ID, "level", history.Score, "")
 		}
 
 		config.DB.Save(&currentUser)
 	}
-
 
 	go func() {
 		wg.Wait()
@@ -209,7 +211,7 @@ func SaveHistory(c *fiber.Ctx) error {
 	}()
 
 	utils.CheckDailyMissions(currentUser.ID, "quiz", history.Score, history.QuizTitle)
-	utils.CheckDailyMissions(currentUser.ID, "level", history.Score, "")
+
 	return utils.SuccessResponse(c, fiber.StatusCreated, "History saved", history)
 }
 func GetMyHistory(c *fiber.Ctx) error {
