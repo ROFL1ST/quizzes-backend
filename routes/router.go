@@ -23,7 +23,6 @@ func SetupRoutes(app *fiber.App) {
 
 	api.Get("/topics", controllers.GetAllTopics)
 	api.Get("/auth/me", middleware.Protected(), controllers.AuthMe)
-	api.Get("/notifications/stream", middleware.Protected(), controllers.StreamNotifications)
 	// Admin Routes
 	adminGroup := api.Group("/admin", middleware.Protected())
 
@@ -59,7 +58,10 @@ func SetupRoutes(app *fiber.App) {
 	notifGroup := api.Group("/notifications", middleware.Protected())
 	notifGroup.Get("/", controllers.GetMyNotifications)
 	notifGroup.Put("/:id/read", controllers.MarkNotificationRead)
+	notifGroup.Put("/read-all", controllers.MarkAllNotificationsRead)
 	notifGroup.Delete("/", controllers.ClearAllNotifications)
+	// realtime notif stream
+	notifGroup.Get("/stream", controllers.StreamNotifications)
 
 	// question admin routes
 	questionGroup := adminGroup.Group("/questions", middleware.AllowRoles("supervisor", "admin", "pengajar"))

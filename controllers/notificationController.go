@@ -95,3 +95,18 @@ func ClearAllNotifications(c *fiber.Ctx) error {
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "All notifications cleared", nil)
 }
+
+func MarkAllNotificationsRead(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(float64)
+
+	// Update semua notifikasi milik user menjadi is_read = true
+	result := config.DB.Model(&models.Notification{}).
+		Where("user_id = ?", userID).
+		Update("is_read", true)
+
+	if result.Error != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengupdate notifikasi", nil)
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Semua notifikasi ditandai sudah dibaca", nil)
+}
