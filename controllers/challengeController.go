@@ -18,95 +18,116 @@ type CreateChallengeInput struct {
 	Mode              string   `json:"mode"`
 	TimeLimit         int      `json:"time_limit"`
 	IsRealtime        bool     `json:"is_realtime"`
+	WagerAmount       int      `json:"wager_amount"`
 }
 
 func CreateChallenge(c *fiber.Ctx) error {
-	creatorID := c.Locals("user_id").(float64)
-	var input CreateChallengeInput
+    creatorID := c.Locals("user_id").(float64)
+    var input CreateChallengeInput
 
-	if err := c.BodyParser(&input); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
-	}
+    if err := c.BodyParser(&input); err != nil {
+        return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
+    }
 
-	// Validasi input khusus 2v2
-	if input.Mode == "2v2" && len(input.OpponentUsernames) != 3 {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Mode 2v2 butuh 3 orang (1 teman, 2 lawan)", nil)
-	}
+    // Validasi input khusus 2v2
+    if input.Mode == "2v2" && len(input.OpponentUsernames) != 3 {
+        return utils.ErrorResponse(c, fiber.StatusBadRequest, "Mode 2v2 butuh 3 orang (1 teman, 2 lawan)", nil)
+    }
 
-	// 1. Buat Header Challenge
-	challenge := models.Challenge{
-		CreatorID:  uint(creatorID),
-		QuizID:     input.QuizID,
-		Mode:       input.Mode,
-		TimeLimit:  input.TimeLimit,
-		IsRealtime: input.IsRealtime,
-		Status:     "pending",
-	}
+    // --- [LOGIC BARU] Cek Saldo & Potong Taruhan Creator ---
+    if input.WagerAmount > 0 {
+        var creator models.User
+        if err := config.DB.First(&creator, uint(creatorID)).Error; err != nil {
+            return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+        }
 
-	if err := config.DB.Create(&challenge).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed create challenge", err.Error())
-	}
+        if creator.Coins < input.WagerAmount {
+            return utils.ErrorResponse(c, fiber.StatusBadRequest, "Koin tidak cukup untuk taruhan!", nil)
+        }
 
-	// 2. Masukkan Creator sebagai Peserta (Creator selalu Tim A)
-	creatorTeam := "solo"
-	if input.Mode == "2v2" {
-		creatorTeam = "A"
-	}
+        // Potong koin creator sekarang
+        creator.Coins -= input.WagerAmount
+        if err := config.DB.Save(&creator).Error; err != nil {
+            return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal memproses koin", err.Error())
+        }
+    }
+    // --------------------------------------------------------
 
-	creatorPart := models.ChallengeParticipant{
-		ChallengeID: challenge.ID,
-		UserID:      uint(creatorID),
-		Status:      "accepted",
-		Team:        creatorTeam, // Set Tim
-	}
-	config.DB.Create(&creatorPart)
+    // 1. Buat Header Challenge
+    challenge := models.Challenge{
+        CreatorID:   uint(creatorID),
+        QuizID:      input.QuizID,
+        Mode:        input.Mode,
+        TimeLimit:   input.TimeLimit,
+        IsRealtime:  input.IsRealtime,
+        Status:      "pending",
+        WagerAmount: input.WagerAmount, // <-- Simpan nilai taruhan
+    }
 
-	// 3. Masukkan Lawan/Teman
-	if len(input.OpponentUsernames) > 0 {
-		var opponents []models.User
-		// Pastikan urutan query sesuai urutan input array (workaround sederhana)
-		config.DB.Where("username IN ?", input.OpponentUsernames).Find(&opponents)
+    if err := config.DB.Create(&challenge).Error; err != nil {
+        return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed create challenge", err.Error())
+    }
 
-		// Map user untuk memastikan urutan assign tim sesuai input user
-		userMap := make(map[string]models.User)
-		for _, u := range opponents {
-			userMap[u.Username] = u
-		}
+    // 2. Masukkan Creator sebagai Peserta (Creator selalu Tim A)
+    creatorTeam := "solo"
+    if input.Mode == "2v2" {
+        creatorTeam = "A"
+    }
 
-		for i, username := range input.OpponentUsernames {
-			opp, exists := userMap[username]
-			if !exists || opp.ID == uint(creatorID) {
-				continue
-			}
+    creatorPart := models.ChallengeParticipant{
+        ChallengeID: challenge.ID,
+        UserID:      uint(creatorID),
+        Status:      "accepted",
+        Team:        creatorTeam,
+    }
+    config.DB.Create(&creatorPart)
 
-			team := "solo"
-			if input.Mode == "2v2" {
-				if i == 0 {
-					team = "A" // Teman si Creator
-				} else {
-					team = "B" // Musuh
-				}
-			}
+    // 3. Masukkan Lawan/Teman
+    if len(input.OpponentUsernames) > 0 {
+        var opponents []models.User
+        config.DB.Where("username IN ?", input.OpponentUsernames).Find(&opponents)
 
-			part := models.ChallengeParticipant{
-				ChallengeID: challenge.ID,
-				UserID:      opp.ID,
-				Status:      "pending",
-				Team:        team, // Set Tim
-			}
-			config.DB.Create(&part)
+        userMap := make(map[string]models.User)
+        for _, u := range opponents {
+            userMap[u.Username] = u
+        }
 
-			msg := "⚔️ Kamu ditantang main " + input.Mode + "!"
-			if input.Mode == "2v2" && team == "A" {
-				msg = "🛡️ Kamu diajak setim main 2v2!"
-			}
+        for i, username := range input.OpponentUsernames {
+            opp, exists := userMap[username]
+            if !exists || opp.ID == uint(creatorID) {
+                continue
+            }
 
-			// [UPDATED] Send Notification dengan Title
-			utils.SendNotification(opp.ID, "warning", "Tantangan Masuk!", msg, "/challenges")
-		}
-	}
+            team := "solo"
+            if input.Mode == "2v2" {
+                if i == 0 {
+                    team = "A" 
+                } else {
+                    team = "B"
+                }
+            }
 
-	return utils.SuccessResponse(c, fiber.StatusCreated, "Challenge created", challenge)
+            part := models.ChallengeParticipant{
+                ChallengeID: challenge.ID,
+                UserID:      opp.ID,
+                Status:      "pending",
+                Team:        team,
+            }
+            config.DB.Create(&part)
+
+            msg := "⚔️ Kamu ditantang main " + input.Mode + "!"
+            if input.WagerAmount > 0 {
+                msg += fmt.Sprintf(" (Taruhan: %d Koin)", input.WagerAmount)
+            }
+            if input.Mode == "2v2" && team == "A" {
+                msg = "🛡️ Kamu diajak setim main 2v2!"
+            }
+
+            utils.SendNotification(opp.ID, "warning", "Tantangan Masuk!", msg, "/challenges")
+        }
+    }
+
+    return utils.SuccessResponse(c, fiber.StatusCreated, "Challenge created", challenge)
 }
 
 // controllers/socialController.go
@@ -181,39 +202,65 @@ func GetMyChallenges(c *fiber.Ctx) error {
 }
 
 func AcceptChallenge(c *fiber.Ctx) error {
-	id := c.Params("id") // Challenge ID
-	userID := c.Locals("user_id").(float64)
+    id := c.Params("id") // Challenge ID
+    userID := c.Locals("user_id").(float64)
 
-	var participant models.ChallengeParticipant
-	if err := config.DB.Where("challenge_id = ? AND user_id = ?", id, userID).First(&participant).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "You are not in this challenge", nil)
-	}
+    // 1. Ambil data partisipan
+    var participant models.ChallengeParticipant
+    if err := config.DB.Where("challenge_id = ? AND user_id = ?", id, userID).First(&participant).Error; err != nil {
+        return utils.ErrorResponse(c, fiber.StatusNotFound, "You are not in this challenge", nil)
+    }
 
-	if participant.Status != "pending" {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Already responded", nil)
-	}
+    if participant.Status != "pending" {
+        return utils.ErrorResponse(c, fiber.StatusBadRequest, "Already responded", nil)
+    }
 
-	participant.Status = "accepted"
-	config.DB.Save(&participant)
+    // 2. Ambil Data Challenge untuk cek WagerAmount
+    var challenge models.Challenge
+    if err := config.DB.First(&challenge, participant.ChallengeID).Error; err != nil {
+        return utils.ErrorResponse(c, fiber.StatusNotFound, "Challenge data missing", nil)
+    }
 
-	var challenge models.Challenge
-	config.DB.Preload("Participants.User").First(&challenge, participant.ChallengeID)
+    // --- [LOGIC BARU] Cek Saldo Penantang ---
+    if challenge.WagerAmount > 0 {
+        var user models.User
+        if err := config.DB.First(&user, uint(userID)).Error; err != nil {
+            return utils.ErrorResponse(c, fiber.StatusNotFound, "User data error", nil)
+        }
 
-	// A. Jika REALTIME: Jangan auto-start! Trigger SSE update saja.
-	if challenge.IsRealtime {
-		// Broadcast list player terbaru ke Lobby
-		utils.BroadcastLobby(challenge.ID, "player_update", fiber.Map{
-			"players": formatParticipants(challenge.Participants),
-		})
-	} else {
-		// B. Jika ASYNC (Battle Royale Biasa): Logic lama (Auto Active)
-		if challenge.Status == "pending" {
-			challenge.Status = "active"
-			config.DB.Save(&challenge)
-		}
-	}
+        if user.Coins < challenge.WagerAmount {
+            return utils.ErrorResponse(c, fiber.StatusBadRequest, "Koin kamu kurang untuk menerima taruhan ini!", nil)
+        }
 
-	return utils.SuccessResponse(c, fiber.StatusOK, "Challenge accepted!", nil)
+        // Potong koin penantang
+        user.Coins -= challenge.WagerAmount
+        if err := config.DB.Save(&user).Error; err != nil {
+            return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal memproses pembayaran", err.Error())
+        }
+    }
+    // ----------------------------------------
+
+    // 3. Update Status jadi Accepted
+    participant.Status = "accepted"
+    config.DB.Save(&participant)
+
+    // 4. Load ulang challenge dengan preload peserta (untuk broadcast)
+    config.DB.Preload("Participants.User").First(&challenge, participant.ChallengeID)
+
+    // A. Jika REALTIME
+    if challenge.IsRealtime {
+        utils.BroadcastLobby(challenge.ID, "player_update", fiber.Map{
+            "players": formatParticipants(challenge.Participants),
+        })
+    } else {
+        // B. Jika ASYNC
+        if challenge.Status == "pending" {
+            challenge.Status = "active"
+            config.DB.Save(&challenge)
+        }
+    }
+
+    return utils.SuccessResponse(c, fiber.StatusOK, "Challenge accepted!", nil)
 }
 
 func RejectChallenge(c *fiber.Ctx) error {

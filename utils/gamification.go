@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"strconv"
 	"time"
+	"fmt"
 )
 
 func GetJakartaTime() time.Time {
@@ -326,35 +327,33 @@ func CalculateMinXPForLevel(level int) int64 {
 
 func DetermineWinner(challengeID uint) {
 	var challenge models.Challenge
-	if err := config.DB.Preload("Participants").First(&challenge, challengeID).Error; err != nil {
+	// Preload Participants untuk akses data user dan scoring
+	if err := config.DB.Preload("Participants.User").First(&challenge, challengeID).Error; err != nil {
 		return
 	}
 
 	challenge.WinnerID = nil
 	challenge.WinningTeam = ""
 
+	// =================================================================
+	// 1. LOGIKA PENENTUAN PEMENANG (Sesuai kode Anda)
+	// =================================================================
 	if challenge.Mode == "2v2" {
 		// --- LOGIC 2V2 ---
 		scoreA, timeA := 0, 0
 		scoreB, timeB := 0, 0
-		countA, countB := 0, 0 // Hitung jumlah pemain yang selesai per tim
-
+		
 		for _, p := range challenge.Participants {
 			if p.Status == "accepted" && p.IsFinished {
 				if p.Team == "A" {
 					scoreA += p.Score
 					timeA += p.TimeTaken
-					countA++
 				} else if p.Team == "B" {
 					scoreB += p.Score
 					timeB += p.TimeTaken
-					countB++
 				}
 			}
 		}
-
-		// Opsional: Validasi minimal pemain selesai (misal harus ada 1 per tim)
-		// if countA == 0 || countB == 0 { return } 
 
 		if scoreA > scoreB {
 			challenge.WinningTeam = "A"
@@ -397,10 +396,68 @@ func DetermineWinner(challengeID uint) {
 		}
 	}
 
+
+	if challenge.WagerAmount > 0 {
+		// CASE A: Mode 1v1 (Ada WinnerID)
+		if challenge.WinnerID != nil {
+			totalPot := challenge.WagerAmount * 2 // Taruhan Saya + Taruhan Lawan
+			
+			var winner models.User
+			if err := config.DB.First(&winner, *challenge.WinnerID).Error; err == nil {
+				winner.Coins += totalPot
+				config.DB.Save(&winner)
+
+				// Notifikasi Khusus Menang Uang
+				msg := fmt.Sprintf("Jackpot! Kamu menang %d koin dari taruhan!", totalPot)
+				SendNotification(winner.ID, "success", "Menang Taruhan!", msg, "/shop")
+			}
+		} 
+		
+		
+		if challenge.Mode == "2v2" && challenge.WinningTeam != "" && challenge.WinningTeam != "DRAW" {
+		
+			rewardPerPerson := challenge.WagerAmount * 2
+
+			for _, p := range challenge.Participants {
+				if p.Team == challenge.WinningTeam && p.Status == "accepted" {
+					var member models.User
+					if err := config.DB.First(&member, p.UserID).Error; err == nil {
+						member.Coins += rewardPerPerson
+						config.DB.Save(&member)
+
+						msg := fmt.Sprintf("Tim Menang! Kamu dapat %d koin!", rewardPerPerson)
+						SendNotification(member.ID, "success", "Menang Taruhan 2v2!", msg, "/shop")
+					}
+				}
+			}
+		}
+		
+		// CASE C: DRAW (Kembalikan Uang - Optional)
+		// Jika DRAW, biasanya uang hangus atau dikembalikan. 
+		// Kode di bawah ini opsional untuk refund jika Draw.
+		/*
+		if (challenge.Mode == "2v2" && challenge.WinningTeam == "DRAW") {
+			for _, p := range challenge.Participants {
+				if p.Status == "accepted" {
+					// Refund logic here
+				}
+			}
+		}
+		*/
+	}
+
+	// Simpan Perubahan Challenge
 	config.DB.Save(&challenge)
 
-	// Broadcast Notif Pemenang
+	// Broadcast Notif Umum ke Semua Peserta
 	for _, p := range challenge.Participants {
-		SendNotification(p.UserID, "info", "Challenge Selesai", "Pemenang telah ditentukan!", "/challenges")
+		// Hindari spam notif jika pemenang sudah dapat notif khusus di atas
+		isWinner := false
+		if challenge.WinnerID != nil && *challenge.WinnerID == p.UserID { isWinner = true }
+		if challenge.Mode == "2v2" && p.Team == challenge.WinningTeam { isWinner = true }
+
+		if !isWinner {
+			SendNotification(p.UserID, "info", "Challenge Selesai", "Lihat siapa pemenangnya!", "/challenges")
+		}
 	}
 }

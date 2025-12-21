@@ -235,7 +235,7 @@ func SaveHistory(c *fiber.Ctx) error {
 				isCorrect := false
 				switch q.Type {
 				case "short_answer":
-					if strings.ToLower(strings.TrimSpace(answer)) == strings.ToLower(strings.TrimSpace(q.CorrectAnswer)) {
+					if strings.EqualFold(strings.TrimSpace(answer), strings.TrimSpace(q.CorrectAnswer)) {
 						isCorrect = true
 					}
 				case "multi_select":
