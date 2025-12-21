@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"fmt"
+
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
@@ -9,6 +11,7 @@ import (
 
 func GetDailyInfo(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
+	// Pastikan pakai Waktu Jakarta
 	today := utils.StripTime(utils.GetJakartaTime())
 
 	var user models.User
@@ -16,48 +19,78 @@ func GetDailyInfo(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 	}
 
-	// 1. Cek Status Klaim Hadiah (Login Reward)
+
 	var todayClaim models.DailyClaim
 	err := config.DB.Where("user_id = ? AND reward_type = ? AND claimed_date = ?", userID, "login", today).First(&todayClaim).Error
 
 	displayDay := 0
 	displayStatus := ""
-
+	fmt.Println("Time:", utils.GetJakartaTime(), user.LastActivityDate)
 	if err == nil {
-		// SUDAH KLAIM HARI INI
 		displayDay = user.LoginStreak
 		displayStatus = "cooldown"
 	} else {
-		// BELUM KLAIM HARI INI
-		lastClaim := utils.GetJakartaTime().AddDate(0, 0, -100) // Default lama
+		lastClaim := utils.GetJakartaTime().AddDate(0, 0, -100)
 		if user.LastClaimDate != nil {
 			lastClaim = *user.LastClaimDate
 		}
-
+		// Cek selisih hari untuk Login Streak
 		diff := utils.DaysBetween(lastClaim, utils.GetJakartaTime())
-
 		if diff > 1 {
-			displayDay = 1 // Bakal Reset
+			displayDay = 1 
 		} else {
-			displayDay = user.LoginStreak + 1 // Bakal Lanjut
+			displayDay = user.LoginStreak + 1
 		}
 		displayStatus = "claimable"
 	}
 
-	// Hitung Hadiah Berdasarkan Siklus 100 Hari
 	cycleDay := displayDay % 100
-	if cycleDay == 0 {
-		cycleDay = 100
-	}
+	if cycleDay == 0 { cycleDay = 100 }
 
 	var rewardConfig models.DailyRewardConfig
 	if err := config.DB.Where("day = ?", cycleDay).First(&rewardConfig).Error; err != nil {
-		rewardConfig.Reward = 20 // Default reward
+		rewardConfig.Reward = 20
 	}
 
-	// 2. Cek Misi Harian (Assign jika belum ada)
-	utils.AssignDailyMissions(uint(userID))
+	// =========================================================
+	// 2. LOGIKA QUIZ STREAK (ACTIVITY) - INI YANG DIPERBAIKI
+	// =========================================================
+	
+	// Default nilai
+	quizStreakDisplay := user.StreakCount
+	isQuizDone := false
 
+	if user.LastActivityDate != nil {
+		lastActivity := utils.StripTime(*user.LastActivityDate)
+		
+		// Hitung selisih hari: (Hari Ini - Terakhir Main)
+		diffActivity := utils.DaysBetween(lastActivity, today)
+
+		if diffActivity == 0 {
+			// KASUS A: Sudah main hari ini
+			isQuizDone = true
+			// Streak tetap sesuai DB
+		} else if diffActivity == 1 {
+			// KASUS B: Terakhir main kemarin (Streak Aman, tapi belum nambah)
+			isQuizDone = false
+			// Streak tetap sesuai DB (User melihat angka streak kemarin, menunggu diteruskan)
+		} else {
+			// KASUS C: Sudah lewat > 1 hari (Streak Putus)
+			isQuizDone = false
+			// TAMPILKAN 0 ke Frontend (Visual Reset)
+			// Catatan: DB baru akan reset jadi 1 saat user nanti main kuis lagi.
+			quizStreakDisplay = 0 
+		}
+	} else {
+		// Belum pernah main
+		quizStreakDisplay = 0
+		isQuizDone = false
+	}
+
+	// =========================================================
+	// 3. LOGIKA MISI HARIAN
+	// =========================================================
+	utils.AssignDailyMissions(uint(userID))
 	var userMissions []models.UserMission
 	config.DB.Preload("Mission").
 		Where("user_id = ? AND reset_date = ?", userID, today).
@@ -83,23 +116,16 @@ func GetDailyInfo(c *fiber.Ctx) error {
 		})
 	}
 
-	// [BARU] Cek apakah Quiz Streak sudah dikerjakan hari ini?
-	isQuizDone := false
-	if user.LastActivityDate != nil {
-		lastActivity := utils.StripTime(*user.LastActivityDate)
-		// Bandingkan tanggal aktivitas terakhir dengan hari ini (WIB)
-		if lastActivity.Equal(today) {
-			isQuizDone = true
-		}
-	}
-
 	return utils.SuccessResponse(c, fiber.StatusOK, "Info retrieved", fiber.Map{
 		"streak": fiber.Map{
-			"day":          displayDay, // Hari login (untuk UI Card Hadiah)
-			"reward":       rewardConfig.Reward,
-			"status":       displayStatus,
-			"quiz_streak":  user.StreakCount, // Total streak kuis
-			"is_quiz_done": isQuizDone,       // Status pengerjaan hari ini
+			// Info Login Reward
+			"day":    displayDay,       
+			"reward": rewardConfig.Reward,
+			"status": displayStatus,
+			
+			// Info Quiz Streak (Untuk Icon Api)
+			"quiz_streak":  quizStreakDisplay, // Angka yang sudah dihitung visualnya
+			"is_quiz_done": isQuizDone,        // Status boolean
 		},
 		"missions": missionResponse,
 	})
