@@ -356,3 +356,49 @@ func ShareProfileTrigger(c *fiber.Ctx) error {
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Share event recorded", nil)
 }
+
+
+type TopicAnalysis struct {
+	TopicName   string  `json:"topic_name"`
+	PlayedCount int     `json:"played_count"`
+	AvgScore    float64 `json:"avg_score"`
+}
+
+func GetUserSmartAnalytics(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(float64)
+	var stats []TopicAnalysis
+
+	
+	err := config.DB.Table("histories").
+		Select("topics.name as topic_name, COUNT(histories.id) as played_count, AVG(histories.score) as avg_score").
+		Joins("JOIN quizzes ON quizzes.id = histories.quiz_id").
+		Joins("JOIN topics ON topics.id = quizzes.topic_id").
+		Where("histories.user_id = ?", userID).
+		Group("topics.name").
+		Having("COUNT(histories.id) > 0"). // Hanya ambil yg pernah dimainkan
+		Scan(&stats).Error
+
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal analisis data", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Analisis Performa User", stats)
+}
+
+func GetActivityCalendar(c *fiber.Ctx) error {
+    userID := c.Locals("user_id").(float64)
+    var dates []string
+
+    // Ambil tanggal unik dari history bermain user
+    // Syntax SQL: DATE_FORMAT untuk MySQL. Gunakan TO_CHAR untuk Postgres.
+    err := config.DB.Model(&models.History{}).
+        Select("DISTINCT TO_CHAR(created_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')").
+        Where("user_id = ?", userID).
+        Scan(&dates).Error
+
+    if err != nil {
+        return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengambil kalender", err.Error())
+    }
+
+    return utils.SuccessResponse(c, fiber.StatusOK, "Kalender Aktivitas", dates)
+}

@@ -24,6 +24,7 @@ type CreateHistoryInput struct {
 	Snapshot    json.RawMessage `json:"snapshot"`
 	TimeTaken   int             `json:"time_taken"`
 	ChallengeID uint            `json:"challenge_id"`
+	QuestionIDs []uint          `json:"question_ids"`
 }
 
 func SaveHistory(c *fiber.Ctx) error {
@@ -38,10 +39,17 @@ func SaveHistory(c *fiber.Ctx) error {
 	// 1. LOGIKA PENILAIAN (GRADING)
 	// =================================================================
 	var questions []models.Question
-	if err := config.DB.Where("quiz_id = ?", input.QuizID).Find(&questions).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch questions", err.Error())
+	if input.QuizID != 0 {
+		// Kuis Normal
+		if err := config.DB.Where("quiz_id = ?", input.QuizID).Find(&questions).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch questions", err.Error())
+		}
+	} else if len(input.QuestionIDs) > 0 {
+		// Remedial (Ambil dari list ID)
+		if err := config.DB.Where("id IN ?", input.QuestionIDs).Find(&questions).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch remedial questions", err.Error())
+		}
 	}
-
 	questionMap := make(map[uint]models.Question)
 	for _, q := range questions {
 		questionMap[q.ID] = q
@@ -167,6 +175,11 @@ func SaveHistory(c *fiber.Ctx) error {
 
 	var currentUser models.User
 	if err := config.DB.First(&currentUser, uint(userID)).Error; err == nil {
+
+		utils.UpdateQuizStreak(&currentUser)
+		config.DB.Save(&currentUser)
+	}
+	if err := config.DB.First(&currentUser, uint(userID)).Error; err == nil {
 		// Broadcast Lobby (Realtime) - Memberitahu pemain lain bahwa user ini selesai
 		if input.ChallengeID != 0 {
 			utils.BroadcastLobby(input.ChallengeID, "player_finished", fiber.Map{
@@ -235,7 +248,7 @@ func SaveHistory(c *fiber.Ctx) error {
 				isCorrect := false
 				switch q.Type {
 				case "short_answer":
-					if strings.ToLower(strings.TrimSpace(answer)) == strings.ToLower(strings.TrimSpace(q.CorrectAnswer)) {
+					if strings.EqualFold(strings.TrimSpace(answer), strings.TrimSpace(q.CorrectAnswer)) {
 						isCorrect = true
 					}
 				case "multi_select":
@@ -285,6 +298,7 @@ func SaveHistory(c *fiber.Ctx) error {
 			utils.SendNotification(currentUser.ID, "success", "Naik Level!", "⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(newLevel), "/profile")
 			utils.CheckDailyMissions(currentUser.ID, "level", 0, "levelup")
 		}
+		utils.UpdateQuizStreak(&currentUser)
 		config.DB.Save(&currentUser)
 	}
 
@@ -292,12 +306,13 @@ func SaveHistory(c *fiber.Ctx) error {
 		wg.Wait()
 		utils.CheckQuizAchievements(history.UserID, finalScore)
 	}()
-
+	utils.CheckAndApplyStreak(uint(userID))
 	utils.CheckDailyMissions(currentUser.ID, "quiz", finalScore, history.QuizTitle)
 	utils.CheckDailyMissions(currentUser.ID, "level", finalScore, "xp_gain")
 
 	return utils.SuccessResponse(c, fiber.StatusCreated, "History saved", history)
 }
+
 func GetMyHistory(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 
@@ -349,8 +364,21 @@ func GetHistoryByID(c *fiber.Ctx) error {
 	}
 
 	var questions []models.Question
-	if err := config.DB.Where("quiz_id = ?", history.QuizID).Find(&questions).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to retrieve questions", nil)
+	if history.QuizID != 0 {
+		config.DB.Where("quiz_id = ?", history.QuizID).Find(&questions)
+	} else {
+		var userAnswers map[string]string
+		if err := json.Unmarshal(history.Snapshot, &userAnswers); err == nil {
+			var qIDs []uint
+			for k := range userAnswers {
+				if idInt, err := strconv.Atoi(k); err == nil {
+					qIDs = append(qIDs, uint(idInt))
+				}
+			}
+			if len(qIDs) > 0 {
+				config.DB.Where("id IN ?", qIDs).Find(&questions)
+			}
+		}
 	}
 	response := fiber.Map{
 		"id":         history.ID,

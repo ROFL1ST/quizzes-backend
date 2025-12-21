@@ -123,6 +123,8 @@ func SetupRoutes(app *fiber.App) {
 	userGroup.Put("/me", controllers.UpdateProfile) // Ganti nama/password
 	userGroup.Get("/:username", controllers.GetUserProfile)
 	userGroup.Post("/share", controllers.ShareProfileTrigger)
+	userGroup.Get("/analytics/smart", controllers.GetUserSmartAnalytics)
+    userGroup.Get("/activity/calendar", controllers.GetActivityCalendar)
 
 	// Shop Routes
 	shopGroup := api.Group("/shop", middleware.Protected())
@@ -132,8 +134,16 @@ func SetupRoutes(app *fiber.App) {
 	shopGroup.Post("/equip", controllers.EquipItem)
 
 	// daily routes
-	daily := api.Group("/daily", middleware.Protected())     
-	daily.Get("/info", controllers.GetDailyInfo)             
-	daily.Post("/claim-login", controllers.ClaimLoginReward) 
+	daily := api.Group("/daily", middleware.Protected())
+	daily.Get("/info", controllers.GetDailyInfo)
+	daily.Post("/claim-login", controllers.ClaimLoginReward)
 	daily.Post("/claim-mission", controllers.ClaimMissionReward)
+
+	// comunity quiz
+	comunityGroup := api.Group("/community", middleware.Protected())
+	comunityGroup.Post("/quizzes", controllers.CreateCommunityQuiz)
+	comunityGroup.Get("/quizzes", controllers.GetCommunityQuizzes)
+	comunityGroup.Get("/quizzes/me", controllers.GetMyCommunityQuizzes)
+
+	api.Get("/quizzes/remedial/start", middleware.Protected(), controllers.GetRemedialQuestions)
 }

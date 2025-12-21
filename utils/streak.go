@@ -5,8 +5,17 @@ import (
 	"time"
 )
 
-func UpdateStreak(user *models.User) {
-	now := time.Now()
+func DaysBetween(lastDate time.Time, nowDate time.Time) int {
+	d1 := StripTime(lastDate)
+	d2 := StripTime(nowDate)
+
+	// Hitung durasi jam dibagi 24
+	hours := d2.Sub(d1).Hours()
+	return int(hours / 24)
+}
+
+func UpdateQuizStreak(user *models.User) {
+	now := GetJakartaTime()
 
 	if user.LastActivityDate == nil {
 		user.StreakCount = 1
@@ -14,23 +23,36 @@ func UpdateStreak(user *models.User) {
 		return
 	}
 
-	last := *user.LastActivityDate
+	diff := DaysBetween(*user.LastActivityDate, now)
 
-	y1, m1, d1 := last.Date()
-	y2, m2, d2 := now.Date()
-
-	dateLast := time.Date(y1, m1, d1, 0, 0, 0, 0, time.Local)
-	dateNow := time.Date(y2, m2, d2, 0, 0, 0, 0, time.Local)
-
-	daysDiff := int(dateNow.Sub(dateLast).Hours() / 24)
-
-	if daysDiff == 1 {
-
+	if diff == 0 {
+		user.LastActivityDate = &now
+	} else if diff == 1 {
 		user.StreakCount++
-	} else if daysDiff > 1 {
+		user.LastActivityDate = &now
+	} else {
+		user.StreakCount = 1 // Reset jika bolos
+		user.LastActivityDate = &now
+	}
+}
 
-		user.StreakCount = 1
+func UpdateLoginStreak(user *models.User) {
+	now := GetJakartaTime()
+
+	if user.LastClaimDate == nil {
+		user.LoginStreak = 1
+		user.LastClaimDate = &now
+		return
 	}
 
-	user.LastActivityDate = &now
+	diff := DaysBetween(*user.LastClaimDate, now)
+
+	if diff == 0 {
+
+		user.LastClaimDate = &now
+	} else {
+
+		user.LoginStreak++
+		user.LastClaimDate = &now
+	}
 }
