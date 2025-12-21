@@ -295,7 +295,7 @@ func SaveHistory(c *fiber.Ctx) error {
 			activity := models.Activity{UserID: currentUser.ID, Type: "level_up", Description: "Naik ke Level " + strconv.Itoa(newLevel)}
 			config.DB.Create(&activity)
 
-			utils.SendNotification(currentUser.ID, "success", "Naik Level!", "⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(newLevel), "/profile")
+			utils.SendNotification(currentUser.ID, "success", "Naik Level!", "⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(newLevel), "/@"+currentUser.Username)
 			utils.CheckDailyMissions(currentUser.ID, "level", 0, "levelup")
 		}
 		utils.UpdateQuizStreak(&currentUser)
