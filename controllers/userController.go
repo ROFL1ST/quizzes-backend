@@ -392,7 +392,7 @@ func GetActivityCalendar(c *fiber.Ctx) error {
     // Ambil tanggal unik dari history bermain user
     // Syntax SQL: DATE_FORMAT untuk MySQL. Gunakan TO_CHAR untuk Postgres.
     err := config.DB.Model(&models.History{}).
-        Select("DISTINCT TO_CHAR(created_at, 'YYYY-MM-DD')"). 
+        Select("DISTINCT TO_CHAR(created_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')").
         Where("user_id = ?", userID).
         Scan(&dates).Error
 
