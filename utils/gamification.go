@@ -461,3 +461,37 @@ func DetermineWinner(challengeID uint) {
 		}
 	}
 }
+
+func CheckAndApplyStreak(userID uint) {
+	var user models.User
+	if err := config.DB.First(&user, userID).Error; err != nil {
+		return
+	}
+
+	// Dapatkan Waktu Sekarang (Jakarta)
+	now := GetJakartaTime()
+	today := StripTime(now)
+
+	// Cek kapan terakhir update streak
+	var lastStreakDate time.Time
+	if user.LastStreakUpdate != nil {
+		// Konversi ke Jakarta Time untuk perbandingan
+		lastStreakDate = StripTime(*user.LastStreakUpdate)
+	}
+
+	// LOGIKA DUOLINGO
+	if user.LastStreakUpdate != nil && lastStreakDate.Equal(today) {
+		// KASUS 1: Sudah mengerjakan hari ini -> Jangan update streak, cukup update LastActivity
+		// (No Op)
+	} else if user.LastStreakUpdate != nil && lastStreakDate.AddDate(0, 0, 1).Equal(today) {
+		// KASUS 2: Terakhir mengerjakan kemarin -> Streak + 1
+		user.StreakCount++
+	} else {
+		// KASUS 3: Terlewat satu hari atau lebih, atau Baru Main -> Reset jadi 1
+		user.StreakCount = 1
+	}
+
+	// Simpan waktu update streak sekarang
+	user.LastStreakUpdate = &now
+	config.DB.Save(&user)
+}

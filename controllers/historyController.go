@@ -292,7 +292,7 @@ func SaveHistory(c *fiber.Ctx) error {
 		wg.Wait()
 		utils.CheckQuizAchievements(history.UserID, finalScore)
 	}()
-
+	utils.CheckAndApplyStreak(uint(userID))
 	utils.CheckDailyMissions(currentUser.ID, "quiz", finalScore, history.QuizTitle)
 	utils.CheckDailyMissions(currentUser.ID, "level", finalScore, "xp_gain")
 
