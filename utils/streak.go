@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"time"
 )
@@ -9,9 +10,53 @@ func DaysBetween(lastDate time.Time, nowDate time.Time) int {
 	d1 := StripTime(lastDate)
 	d2 := StripTime(nowDate)
 
-	// Hitung durasi jam dibagi 24
 	hours := d2.Sub(d1).Hours()
 	return int(hours / 24)
+}
+
+func RecordActivity(userID uint) {
+	now := GetJakartaTime()
+	today := StripTime(now)
+
+	var exists int64
+	config.DB.Model(&models.StreakLog{}).
+		Where("user_id = ? AND date = ?", userID, today).
+		Count(&exists)
+
+	if exists > 0 {
+		return
+	}
+
+	logEntry := models.StreakLog{
+		UserID: userID,
+		Date:   today,
+	}
+	if err := config.DB.Create(&logEntry).Error; err != nil {
+		return
+	}
+
+	var user models.User
+	if err := config.DB.First(&user, userID).Error; err != nil {
+		return
+	}
+
+	yesterday := today.AddDate(0, 0, -1)
+	var yesterdayExists int64
+	config.DB.Model(&models.StreakLog{}).
+		Where("user_id = ? AND date = ?", userID, yesterday).
+		Count(&yesterdayExists)
+
+	if yesterdayExists > 0 {
+
+		user.StreakCount++
+	} else {
+
+		user.StreakCount = 1
+	}
+
+	user.LastActivityDate = &now
+
+	config.DB.Save(&user)
 }
 
 func UpdateQuizStreak(user *models.User) {

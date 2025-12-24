@@ -16,7 +16,7 @@ func GetDailyInfo(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 	}
 
-	// 1. Cek Status Klaim Hadiah
+	// 1. Cek Status Klaim Hadiah (Login Reward)
 	var todayClaim models.DailyClaim
 	err := config.DB.Where("user_id = ? AND reward_type = ? AND claimed_date = ?", userID, "login", today).First(&todayClaim).Error
 
@@ -24,16 +24,14 @@ func GetDailyInfo(c *fiber.Ctx) error {
 	displayStatus := ""
 
 	if err == nil {
-
 		displayDay = user.LoginStreak
 		displayStatus = "cooldown"
 	} else {
-
 		displayDay = user.LoginStreak + 1
 		displayStatus = "claimable"
 	}
 
-	// Hitung Hadiah
+	// Hitung Hadiah Login
 	cycleDay := displayDay % 100
 	if cycleDay == 0 {
 		cycleDay = 100
@@ -44,25 +42,34 @@ func GetDailyInfo(c *fiber.Ctx) error {
 		rewardConfig.Reward = 20
 	}
 
-	// 2. Logic Quiz Streak (Untuk Tampilan Icon Api) - Tetap Reset Visual jika bolos
+	
 	quizStreakDisplay := user.StreakCount
 	isQuizDone := false
 
-	if user.LastActivityDate != nil {
-		lastActivity := utils.StripTime(*user.LastActivityDate)
-		diffActivity := utils.DaysBetween(lastActivity, today)
 
-		if diffActivity == 0 {
+	var lastLog models.StreakLog
+	errLog := config.DB.Where("user_id = ?", userID).Order("date desc").First(&lastLog).Error
+
+	if errLog != nil {
+		// Jika belum pernah main sama sekali
+		quizStreakDisplay = 0
+		isQuizDone = false
+	} else {
+	
+		diff := utils.DaysBetween(lastLog.Date, today)
+
+		if diff == 0 {
+			// Kasus: Log terakhir adalah hari ini -> Sudah mengerjakan
 			isQuizDone = true
-		} else if diffActivity == 1 {
-			isQuizDone = false // Masih aman, tapi belum dikerjakan
+			// Streak count ambil dari User (sudah diupdate via RecordActivity)
+		} else if diff == 1 {
+			// Kasus: Log terakhir adalah kemarin -> Belum mengerjakan hari ini, tapi streak masih aman
+			isQuizDone = false
 		} else {
-			// Sudah lewat > 1 hari -> Tampilkan 0 (Visual Reset)
+			// Kasus: Log terakhir > 1 hari lalu (Bolos) -> Visual Reset jadi 0
 			isQuizDone = false
 			quizStreakDisplay = 0
 		}
-	} else {
-		quizStreakDisplay = 0
 	}
 
 	// 3. Misi Harian
@@ -97,8 +104,8 @@ func GetDailyInfo(c *fiber.Ctx) error {
 			"day":          displayDay,
 			"reward":       rewardConfig.Reward,
 			"status":       displayStatus,
-			"quiz_streak":  quizStreakDisplay,
-			"is_quiz_done": isQuizDone,
+			"quiz_streak":  quizStreakDisplay, //
+			"is_quiz_done": isQuizDone,        //
 		},
 		"missions": missionResponse,
 	})
