@@ -79,6 +79,7 @@ func ConnectDB() {
 		&models.DailyRewardConfig{},
 		&models.Mission{},
 		&models.UserMission{},
+		&models.StreakLog{},
 	)
 
 	if err != nil {

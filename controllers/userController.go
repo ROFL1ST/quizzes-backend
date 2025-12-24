@@ -386,19 +386,19 @@ func GetUserSmartAnalytics(c *fiber.Ctx) error {
 }
 
 func GetActivityCalendar(c *fiber.Ctx) error {
-    userID := c.Locals("user_id").(float64)
-    var dates []string
+	userID := c.Locals("user_id").(float64)
+	var dates []string
 
-    // Ambil tanggal unik dari history bermain user
-    // Syntax SQL: DATE_FORMAT untuk MySQL. Gunakan TO_CHAR untuk Postgres.
-    err := config.DB.Model(&models.History{}).
-        Select("DISTINCT TO_CHAR(created_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')").
-        Where("user_id = ?", userID).
-        Scan(&dates).Error
+	
+	err := config.DB.Model(&models.StreakLog{}).
+		Select("TO_CHAR(date, 'YYYY-MM-DD')").
+		Where("user_id = ?", userID).
+		Order("date desc"). // Urutkan dari terbaru
+		Scan(&dates).Error
 
-    if err != nil {
-        return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengambil kalender", err.Error())
-    }
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengambil kalender", err.Error())
+	}
 
-    return utils.SuccessResponse(c, fiber.StatusOK, "Kalender Aktivitas", dates)
+	return utils.SuccessResponse(c, fiber.StatusOK, "Kalender Aktivitas", dates)
 }
