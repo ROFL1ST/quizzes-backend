@@ -132,7 +132,7 @@ func GetRemedialQuestions(c *fiber.Ctx) error {
 
     // 3. Ambil data soal lengkap
     var questions []models.Question
-    config.DB.Where("id IN ?", wrongQIDs).Find(&questions)
+    config.DB.Preload("Quiz").Where("id IN ?", wrongQIDs).Find(&questions)
 
     return utils.SuccessResponse(c, fiber.StatusOK, "Sesi Remedial Dimulai", questions)
 }
