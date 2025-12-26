@@ -111,6 +111,7 @@ func SetupRoutes(app *fiber.App) {
 	challenges.Get("/:id/lobby-stream", controllers.StreamChallengeLobby)
 	challenges.Post("/:id/start", controllers.StartGameRealtime)
 	challenges.Post("/:id/progress", controllers.UpdateChallengeProgress)
+	challenges.Post("/:id/leave", controllers.LeaveLobby)
 
 	// Activity Feed
 	api.Get("/feed", middleware.Protected(), controllers.GetFriendActivity)

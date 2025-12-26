@@ -458,3 +458,33 @@ func UpdateChallengeProgress(c *fiber.Ctx) error {
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Progress updated", nil)
 }
+
+func LeaveLobby(c *fiber.Ctx) error {
+	id := c.Params("id")
+	challengeIDData, _ := strconv.Atoi(id)
+	challengeID := uint(challengeIDData)
+	userID := c.Locals("user_id").(float64)
+
+	// 1. Ambil Partisipan
+	var participant models.ChallengeParticipant
+	if err := config.DB.Where("challenge_id = ? AND user_id = ?", challengeID, userID).First(&participant).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "You are not in this challenge", nil)
+	}
+
+	// 2. Ubah status kembali ke 'pending'
+	participant.Status = "pending"
+	if err := config.DB.Save(&participant).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update status", err.Error())
+	}
+
+	// 3. Ambil data challenge terbaru untuk broadcast
+	var challenge models.Challenge
+	if err := config.DB.Preload("Participants.User").First(&challenge, challengeID).Error; err == nil {
+		// Broadcast ke lobby bahwa ada update player (user ini jadi pending/ilang dari list ready)
+		utils.BroadcastLobby(challenge.ID, "player_update", fiber.Map{
+			"players": formatParticipants(challenge.Participants),
+		})
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Left lobby successfully", nil)
+}
