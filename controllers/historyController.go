@@ -176,7 +176,7 @@ func SaveHistory(c *fiber.Ctx) error {
 	var currentUser models.User
 	if err := config.DB.First(&currentUser, uint(userID)).Error; err == nil {
 
-		utils.UpdateQuizStreak(&currentUser)
+		// utils.UpdateQuizStreak(&currentUser)
 		config.DB.Save(&currentUser)
 	}
 	if err := config.DB.First(&currentUser, uint(userID)).Error; err == nil {
@@ -298,7 +298,7 @@ func SaveHistory(c *fiber.Ctx) error {
 			utils.SendNotification(currentUser.ID, "success", "Naik Level!", "⭐ Level Up! Kamu naik ke Level "+strconv.Itoa(newLevel), "/@"+currentUser.Username)
 			utils.CheckDailyMissions(currentUser.ID, "level", 0, "levelup")
 		}
-		utils.UpdateQuizStreak(&currentUser)
+		// utils.UpdateQuizStreak(&currentUser)
 		config.DB.Save(&currentUser)
 	}
 
