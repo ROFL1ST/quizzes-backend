@@ -51,7 +51,7 @@ func RecordActivity(userID uint) {
 		user.StreakCount++
 	} else {
 
-		user.StreakCount = 1
+		user.StreakCount = 0
 	}
 
 	user.LastActivityDate = &now
@@ -63,7 +63,7 @@ func UpdateQuizStreak(user *models.User) {
 	now := GetJakartaTime()
 
 	if user.LastActivityDate == nil {
-		user.StreakCount = 1
+		user.StreakCount = 0
 		user.LastActivityDate = &now
 		return
 	}
@@ -76,7 +76,7 @@ func UpdateQuizStreak(user *models.User) {
 		user.StreakCount++
 		user.LastActivityDate = &now
 	} else {
-		user.StreakCount = 1 // Reset jika bolos
+		user.StreakCount = 0 // Reset jika bolos
 		user.LastActivityDate = &now
 	}
 }
