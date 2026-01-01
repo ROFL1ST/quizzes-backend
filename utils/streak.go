@@ -51,7 +51,7 @@ func RecordActivity(userID uint) {
 		user.StreakCount++
 	} else {
 
-		user.StreakCount = 1
+		user.StreakCount = 0
 	}
 
 	user.LastActivityDate = &now
