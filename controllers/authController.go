@@ -2,15 +2,16 @@ package controllers
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+	"time"
+
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
-	"os"
-	"strconv"
-	"time"
 )
 
 func RegisterUser(c *fiber.Ctx) error {
@@ -280,4 +281,42 @@ func ResetPassword(c *fiber.Ctx) error {
 	config.DB.Delete(&resetData)
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Password updated successfully. Please login.", nil)
+}
+
+// CreateAdmin allows a Supervisor to create a new Admin/Pengajar
+func CreateAdmin(c *fiber.Ctx) error {
+	// Role check is handled by middleware, but we can double check if needed
+	// userRole := c.Locals("role").(string)
+
+	var input struct {
+		Name     string `json:"name"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+		RoleID   uint   `json:"role_id"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
+	}
+
+	// Calculate default role if not provided (e.g. 2 for Pengajar)
+	// For now, require RoleID
+	var role models.Role
+	if err := config.DB.First(&role, input.RoleID).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid Role ID", nil)
+	}
+
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
+	admin := models.Admin{
+		Name:     input.Name,
+		Username: input.Username,
+		Password: string(hashed),
+		RoleID:   input.RoleID,
+	}
+
+	if err := config.DB.Create(&admin).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username exists", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusCreated, "Admin created successfully", admin)
 }

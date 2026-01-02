@@ -1,8 +1,9 @@
 package models
 
 import (
-	"gorm.io/gorm"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type User struct {
@@ -21,6 +22,7 @@ type User struct {
 	LoginStreak            int        `json:"login_streak" gorm:"default:0"`
 	LastClaimDate          *time.Time `json:"last_claim_date"`
 	LastActivityDate       *time.Time `json:"last_activity_date"`
+	IsBanned               bool       `json:"is_banned" gorm:"default:false"`
 	UserItems              []UserItem `json:"equipped_items" gorm:"foreignKey:UserID"`
 }
 

@@ -15,6 +15,9 @@ func SetupRoutes(app *fiber.App) {
 	api.Post("/admin/register", controllers.RegisterAdmin)
 	api.Post("/admin/login", controllers.LoginAdmin)
 
+	// Public Announcements
+	api.Get("/announcements", controllers.GetAnnouncements)
+
 	// verify email
 	api.Post("/verify-email", controllers.VerifyEmail)
 	// forgot password
@@ -25,6 +28,9 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/auth/me", middleware.Protected(), controllers.AuthMe)
 	// Admin Routes
 	adminGroup := api.Group("/admin", middleware.Protected())
+
+	// Superadmin only: Create Admin
+	adminGroup.Post("/create-admin", middleware.AllowRoles("supervisor"), controllers.CreateAdmin)
 
 	adminGroup.Get("/analytics", middleware.AllowRoles("supervisor", "admin"), controllers.GetDashboardAnalytics)
 
@@ -46,7 +52,7 @@ func SetupRoutes(app *fiber.App) {
 	quizzesAdmin.Get("/", controllers.GetAllQuizzesAdmin)
 	quizzesAdmin.Post("/", controllers.CreateQuiz)
 	quizzesAdmin.Put("/:id", controllers.UpdateQuizAdmin)
-	quizzesAdmin.Delete("/:id", controllers.DeleteQuizAdmin)
+	quizzesAdmin.Delete("/:id", middleware.AllowRoles("supervisor", "admin"), controllers.DeleteQuizAdmin)
 	quizzesAdmin.Get("/analysis/:id", controllers.GetQuizAnalysisAdminById)
 
 	// role management
@@ -69,13 +75,41 @@ func SetupRoutes(app *fiber.App) {
 	questionGroup.Post("/", controllers.CreateQuestion)
 	questionGroup.Post("/bulk", controllers.BulkUploadQuestions)
 	questionGroup.Put("/:id", controllers.UpdateQuestionAdmin)
-	questionGroup.Delete("/:id", controllers.DeleteQuestionAdmin)
+	questionGroup.Delete("/:id", middleware.AllowRoles("supervisor", "admin"), controllers.DeleteQuestionAdmin)
 
 	// shop routes admin
 	shopAdmin := adminGroup.Group("/shop", middleware.AllowRoles("supervisor", "admin"))
 	shopAdmin.Post("/items", controllers.CreateShopItem)
 	shopAdmin.Put("/items/:id", controllers.UpdateShopItem)
 	shopAdmin.Delete("/items/:id", controllers.DeleteShopItem)
+
+	// Report Admin Routes
+	reportAdmin := adminGroup.Group("/reports", middleware.AllowRoles("supervisor", "admin"))
+	reportAdmin.Get("/", controllers.GetAllReports)
+	reportAdmin.Put("/:id", controllers.ResolveReport)
+
+	// Review Admin Routes
+	reviewAdmin := adminGroup.Group("/reviews", middleware.AllowRoles("supervisor", "admin"))
+	reviewAdmin.Get("/", controllers.GetAllReviews)
+	reviewAdmin.Delete("/:id", controllers.DeleteReview) // Optional: If needed
+
+	// Ban/Unban Routes
+	adminGroup.Put("/users/:id/ban", controllers.BanUser)
+	adminGroup.Put("/users/:id/unban", controllers.UnbanUser)
+
+	// Broadcast Route
+	adminGroup.Post("/broadcast", controllers.Broadcast)
+
+	// Classroom Admin Routes
+	classroomAdmin := adminGroup.Group("/classrooms", middleware.AllowRoles("supervisor", "admin", "pengajar"))
+	classroomAdmin.Get("/", controllers.GetAllClassrooms)
+	classroomAdmin.Get("/:id", controllers.GetClassroomDetails) // Reuse detail logic
+	classroomAdmin.Post("/members", controllers.AddClassroomMember)
+	classroomAdmin.Delete("/:id/members/:studentId", controllers.RemoveClassroomMember)
+	classroomAdmin.Delete("/assignments/:id", controllers.DeleteAssignment)
+	classroomAdmin.Get("/assignments/:id/submissions", controllers.GetAssignmentSubmissions)
+	classroomAdmin.Put("/:id/teacher", controllers.AssignClassroomTeacher)
+
 	// =============================================================
 
 	// User Routes
@@ -125,7 +159,7 @@ func SetupRoutes(app *fiber.App) {
 	userGroup.Get("/:username", controllers.GetUserProfile)
 	userGroup.Post("/share", controllers.ShareProfileTrigger)
 	userGroup.Get("/analytics/smart", controllers.GetUserSmartAnalytics)
-    userGroup.Get("/activity/calendar", controllers.GetActivityCalendar)
+	userGroup.Get("/activity/calendar", controllers.GetActivityCalendar)
 
 	// Shop Routes
 	shopGroup := api.Group("/shop", middleware.Protected())
@@ -147,4 +181,27 @@ func SetupRoutes(app *fiber.App) {
 	comunityGroup.Get("/quizzes/me", controllers.GetMyCommunityQuizzes)
 
 	api.Get("/quizzes/remedial/start", middleware.Protected(), controllers.GetRemedialQuestions)
+
+	// Global Leaderboard
+	api.Get("/global/leaderboard", middleware.Protected(), controllers.GetGlobalLeaderboard)
+
+	// Report Routes (User)
+	api.Post("/reports", middleware.Protected(), controllers.CreateReport)
+
+	// Review Routes
+	api.Post("/quizzes/:id/reviews", middleware.Protected(), controllers.AddReview)
+	api.Get("/quizzes/:id/reviews", middleware.Protected(), controllers.GetReviews)
+
+	// Classroom Routes
+	classroomGroup := api.Group("/classrooms", middleware.Protected())
+	classroomGroup.Post("/", controllers.CreateClassroom)                 // Create Class (Teacher)
+	classroomGroup.Get("/", controllers.GetMyClassrooms)                  // List my classes
+	classroomGroup.Post("/join", controllers.JoinClassroom)               // Join Class (Student)
+	classroomGroup.Get("/:id", controllers.GetClassroomDetails)           // Class Details
+	classroomGroup.Post("/:id/assignments", controllers.CreateAssignment) // Create Assignment (Teacher)
+
+	// Survival Mode
+	api.Post("/survival/start", middleware.Protected(), controllers.StartSurvival)
+	api.Post("/survival/answer", middleware.Protected(), controllers.AnswerSurvival)
+
 }

@@ -2,29 +2,32 @@ package controllers
 
 import (
 	"encoding/json"
-	"github.com/ROFL1ST/quizzes-backend/config"
-	"github.com/ROFL1ST/quizzes-backend/models"
-	"github.com/ROFL1ST/quizzes-backend/utils"
-	"github.com/gofiber/fiber/v2"
-	"gorm.io/datatypes"
-	"gorm.io/gorm"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ROFL1ST/quizzes-backend/config"
+	"github.com/ROFL1ST/quizzes-backend/models"
+	"github.com/ROFL1ST/quizzes-backend/utils"
+	"github.com/gofiber/fiber/v2"
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
 
 type CreateHistoryInput struct {
-	QuizID      uint            `json:"quiz_id" validate:"required"`
-	QuizTitle   string          `json:"quiz_title"`
-	Score       int             `json:"score"`
-	TotalSoal   int             `json:"total_soal"`
-	Snapshot    json.RawMessage `json:"snapshot"`
-	TimeTaken   int             `json:"time_taken"`
-	ChallengeID uint            `json:"challenge_id"`
-	QuestionIDs []uint          `json:"question_ids"`
+	QuizID       uint            `json:"quiz_id" validate:"required"`
+	QuizTitle    string          `json:"quiz_title"`
+	Score        int             `json:"score"`
+	TotalSoal    int             `json:"total_soal"`
+	Snapshot     json.RawMessage `json:"snapshot"`
+	TimeTaken    int             `json:"time_taken"`
+	ChallengeID  uint            `json:"challenge_id"`
+	QuestionIDs  []uint          `json:"question_ids"`
+	AssignmentID *uint           `json:"assignment_id"` // New
+	ClassroomID  *uint           `json:"classroom_id"`  // New
 }
 
 func SaveHistory(c *fiber.Ctx) error {
@@ -122,18 +125,26 @@ func SaveHistory(c *fiber.Ctx) error {
 
 	// Hitung Final Score (0-100)
 	finalScore := 0
-	if totalQuestions > 0 {
-		finalScore = int(math.Round(float64(correctCount) / float64(totalQuestions) * 100))
+	// Survival Mode (QuizID == 0): Trust Client Score (Streak)
+	if input.QuizID == 0 {
+		finalScore = input.Score
+		totalQuestions = input.TotalSoal
+	} else {
+		if totalQuestions > 0 {
+			finalScore = int(math.Round(float64(correctCount) / float64(totalQuestions) * 100))
+		}
 	}
 
 	history := models.History{
-		UserID:    uint(userID),
-		QuizID:    input.QuizID,
-		QuizTitle: input.QuizTitle,
-		Score:     finalScore,
-		Snapshot:  datatypes.JSON(input.Snapshot),
-		TimeTaken: input.TimeTaken,
-		TotalSoal: totalQuestions,
+		UserID:       uint(userID),
+		QuizID:       input.QuizID,
+		QuizTitle:    input.QuizTitle,
+		Score:        finalScore,
+		Snapshot:     datatypes.JSON(input.Snapshot),
+		TimeTaken:    input.TimeTaken,
+		TotalSoal:    totalQuestions,
+		AssignmentID: input.AssignmentID, // Save field
+		ClassroomID:  input.ClassroomID,  // Save field
 	}
 
 	if err := config.DB.Create(&history).Error; err != nil {
@@ -368,7 +379,17 @@ func GetHistoryByID(c *fiber.Ctx) error {
 		config.DB.Where("quiz_id = ?", history.QuizID).Find(&questions)
 	} else {
 		var userAnswers map[string]string
-		if err := json.Unmarshal(history.Snapshot, &userAnswers); err == nil {
+		// Try to unmarshal directly
+		if err := json.Unmarshal(history.Snapshot, &userAnswers); err != nil {
+			// Failed, maybe it's a JSON string (double encoded)?
+			var jsonString string
+			if errString := json.Unmarshal(history.Snapshot, &jsonString); errString == nil {
+				// It was a string, now unmarshal string content to map
+				json.Unmarshal([]byte(jsonString), &userAnswers)
+			}
+		}
+
+		if len(userAnswers) > 0 {
 			var qIDs []uint
 			for k := range userAnswers {
 				if idInt, err := strconv.Atoi(k); err == nil {
