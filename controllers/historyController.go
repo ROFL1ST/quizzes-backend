@@ -18,14 +18,16 @@ import (
 )
 
 type CreateHistoryInput struct {
-	QuizID      uint            `json:"quiz_id" validate:"required"`
-	QuizTitle   string          `json:"quiz_title"`
-	Score       int             `json:"score"`
-	TotalSoal   int             `json:"total_soal"`
-	Snapshot    json.RawMessage `json:"snapshot"`
-	TimeTaken   int             `json:"time_taken"`
-	ChallengeID uint            `json:"challenge_id"`
-	QuestionIDs []uint          `json:"question_ids"`
+	QuizID       uint            `json:"quiz_id" validate:"required"`
+	QuizTitle    string          `json:"quiz_title"`
+	Score        int             `json:"score"`
+	TotalSoal    int             `json:"total_soal"`
+	Snapshot     json.RawMessage `json:"snapshot"`
+	TimeTaken    int             `json:"time_taken"`
+	ChallengeID  uint            `json:"challenge_id"`
+	QuestionIDs  []uint          `json:"question_ids"`
+	AssignmentID *uint           `json:"assignment_id"` // New
+	ClassroomID  *uint           `json:"classroom_id"`  // New
 }
 
 func SaveHistory(c *fiber.Ctx) error {
@@ -134,13 +136,15 @@ func SaveHistory(c *fiber.Ctx) error {
 	}
 
 	history := models.History{
-		UserID:    uint(userID),
-		QuizID:    input.QuizID,
-		QuizTitle: input.QuizTitle,
-		Score:     finalScore,
-		Snapshot:  datatypes.JSON(input.Snapshot),
-		TimeTaken: input.TimeTaken,
-		TotalSoal: totalQuestions,
+		UserID:       uint(userID),
+		QuizID:       input.QuizID,
+		QuizTitle:    input.QuizTitle,
+		Score:        finalScore,
+		Snapshot:     datatypes.JSON(input.Snapshot),
+		TimeTaken:    input.TimeTaken,
+		TotalSoal:    totalQuestions,
+		AssignmentID: input.AssignmentID, // Save field
+		ClassroomID:  input.ClassroomID,  // Save field
 	}
 
 	if err := config.DB.Create(&history).Error; err != nil {

@@ -4,22 +4,43 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/lib/pq"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type DashboardAnalytics struct {
-	TotalUsers    int64   `json:"total_users"`
-	TotalQuizzes  int64   `json:"total_quizzes"`
-	TotalAttempts int64   `json:"total_attempts"`
-	AverageScore  float64 `json:"average_score"`
-	ActiveUsers   int64   `json:"active_users"`
+	TotalUsers       int64          `json:"total_users"`
+	TotalQuizzes     int64          `json:"total_quizzes"`
+	TotalQuestions   int64          `json:"total_questions"`
+	TotalAttempts    int64          `json:"total_attempts"`
+	AverageScore     float64        `json:"average_score"`
+	ActiveUsers      int64          `json:"active_users"`
+	WeeklyStats      []WeeklyStat   `json:"weekly_stats"`
+	TopicStats       []TopicStat    `json:"topic_stats"`
+	HardestQuestions []QuestionStat `json:"hardest_questions"`
+}
+
+type WeeklyStat struct {
+	Date  string `json:"date"`
+	Count int64  `json:"count"`
+}
+
+type TopicStat struct {
+	Label string `json:"label"`
+	Value int64  `json:"value"`
+}
+
+type QuestionStat struct {
+	QuestionText string `json:"question_text"`
+	Correct      int    `json:"correct"`
+	Incorrect    int    `json:"incorrect"`
 }
 
 type QuestionAnalysis struct {
@@ -68,40 +89,95 @@ func UpdateLevelingConfig(c *fiber.Ctx) error {
 }
 
 func GetDashboardAnalytics(c *fiber.Ctx) error {
-	var totalUsers, totalQuizzes, totalAttempts int64
+	var totalUsers, totalQuizzes, totalAttempts, totalQuestions int64
 	var avgScore float64
-
-	if err := config.DB.Model(&models.User{}).Count(&totalUsers).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting users", nil)
-	}
-
-	if err := config.DB.Model(&models.Quiz{}).Count(&totalQuizzes).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting quizzes", nil)
-	}
-
-	if err := config.DB.Model(&models.History{}).Count(&totalAttempts).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting history", nil)
-	}
-
-	if err := config.DB.Model(&models.History{}).Select("COALESCE(AVG(score), 0)").Scan(&avgScore).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error calculating average", nil)
-	}
-
 	var activeUsers int64
-	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
-	if err := config.DB.Model(&models.History{}).
-		Where("created_at >= ?", sevenDaysAgo).
-		Distinct("user_id").
-		Count(&activeUsers).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting active users", nil)
+	var weeklyStats []WeeklyStat
+	var topicStats []TopicStat
+	var hardestQuestions []QuestionStat
+
+	role := c.Locals("role").(string)
+
+	if role == "pengajar" {
+		userID := uint(c.Locals("user_id").(float64))
+
+		// 1. Total Students (Users)
+		config.DB.Raw("SELECT COUNT(DISTINCT student_id) FROM classroom_members cm JOIN classrooms c ON c.id = cm.classroom_id WHERE c.teacher_id = ?", userID).Scan(&totalUsers)
+
+		// 2. Total Classrooms (Mapped to Quizzes)
+		config.DB.Model(&models.Classroom{}).Where("teacher_id = ?", userID).Count(&totalQuizzes)
+
+		// 3. Total Assignments (Mapped to Questions)
+		config.DB.Raw("SELECT COUNT(*) FROM assignments a JOIN classrooms c ON c.id = a.classroom_id WHERE c.teacher_id = ?", userID).Scan(&totalQuestions)
+
+		// 4. Total Attempts (Dummy for now or Submissions)
+		totalAttempts = 0
+
+	} else {
+		// Admin / Supervisor Logic
+		if err := config.DB.Model(&models.User{}).Count(&totalUsers).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting users", nil)
+		}
+
+		if err := config.DB.Model(&models.Quiz{}).Count(&totalQuizzes).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting quizzes", nil)
+		}
+
+		if err := config.DB.Model(&models.Question{}).Count(&totalQuestions).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting questions", nil)
+		}
+
+		if err := config.DB.Model(&models.History{}).Count(&totalAttempts).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting history", nil)
+		}
+
+		if err := config.DB.Model(&models.History{}).Select("COALESCE(AVG(score), 0)").Scan(&avgScore).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error calculating average", nil)
+		}
+
+		sevenDaysAgo := time.Now().AddDate(0, 0, -7)
+		if err := config.DB.Model(&models.History{}).
+			Where("created_at >= ?", sevenDaysAgo).
+			Distinct("user_id").
+			Count(&activeUsers).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Error counting active users", nil)
+		}
+
+		// 1. Weekly Stats (Last 7 Days)
+		config.DB.Raw(`
+			SELECT TO_CHAR(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COUNT(*) as count 
+			FROM histories 
+			WHERE created_at >= ? 
+			GROUP BY date 
+			ORDER BY date ASC
+		`, sevenDaysAgo).Scan(&weeklyStats)
+
+		// 2. Topic Distribution
+		config.DB.Raw(`
+			SELECT t.title as label, COUNT(q.id) as value
+			FROM topics t
+			JOIN quizzes q ON q.topic_id = t.id
+			GROUP BY t.title
+		`).Scan(&topicStats)
 	}
+
+	// 3. Hardest Questions (Most Incorrect)
+	config.DB.Model(&models.Question{}).
+		Select("question_text, correct_count as correct, incorrect_count as incorrect").
+		Order("incorrect_count DESC").
+		Limit(5).
+		Scan(&hardestQuestions)
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Dashboard analytics retrieved", DashboardAnalytics{
-		TotalUsers:    totalUsers,
-		TotalQuizzes:  totalQuizzes,
-		TotalAttempts: totalAttempts,
-		AverageScore:  avgScore,
-		ActiveUsers:   activeUsers,
+		TotalUsers:       totalUsers,
+		TotalQuizzes:     totalQuizzes,
+		TotalQuestions:   totalQuestions,
+		TotalAttempts:    totalAttempts,
+		AverageScore:     avgScore,
+		ActiveUsers:      activeUsers,
+		WeeklyStats:      weeklyStats,
+		TopicStats:       topicStats,
+		HardestQuestions: hardestQuestions,
 	})
 }
 

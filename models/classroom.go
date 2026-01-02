@@ -6,8 +6,10 @@ type Classroom struct {
 	gorm.Model
 	Code      string            `json:"code" gorm:"unique;not null"`
 	Name      string            `json:"name"`
-	TeacherID uint              `json:"teacher_id"`
-	Teacher   User              `json:"teacher" gorm:"foreignKey:TeacherID"`
+	TeacherID *uint             `json:"teacher_id"`
+	Teacher   *User             `json:"teacher" gorm:"foreignKey:TeacherID"`
+	AdminID   *uint             `json:"admin_id"`
+	Admin     *Admin            `json:"admin" gorm:"foreignKey:AdminID"`
 	Members   []ClassroomMember `json:"members" gorm:"foreignKey:ClassroomID"`
 }
 

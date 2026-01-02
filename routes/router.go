@@ -52,7 +52,7 @@ func SetupRoutes(app *fiber.App) {
 	quizzesAdmin.Get("/", controllers.GetAllQuizzesAdmin)
 	quizzesAdmin.Post("/", controllers.CreateQuiz)
 	quizzesAdmin.Put("/:id", controllers.UpdateQuizAdmin)
-	quizzesAdmin.Delete("/:id", controllers.DeleteQuizAdmin)
+	quizzesAdmin.Delete("/:id", middleware.AllowRoles("supervisor", "admin"), controllers.DeleteQuizAdmin)
 	quizzesAdmin.Get("/analysis/:id", controllers.GetQuizAnalysisAdminById)
 
 	// role management
@@ -75,7 +75,7 @@ func SetupRoutes(app *fiber.App) {
 	questionGroup.Post("/", controllers.CreateQuestion)
 	questionGroup.Post("/bulk", controllers.BulkUploadQuestions)
 	questionGroup.Put("/:id", controllers.UpdateQuestionAdmin)
-	questionGroup.Delete("/:id", controllers.DeleteQuestionAdmin)
+	questionGroup.Delete("/:id", middleware.AllowRoles("supervisor", "admin"), controllers.DeleteQuestionAdmin)
 
 	// shop routes admin
 	shopAdmin := adminGroup.Group("/shop", middleware.AllowRoles("supervisor", "admin"))
@@ -88,12 +88,27 @@ func SetupRoutes(app *fiber.App) {
 	reportAdmin.Get("/", controllers.GetAllReports)
 	reportAdmin.Put("/:id", controllers.ResolveReport)
 
+	// Review Admin Routes
+	reviewAdmin := adminGroup.Group("/reviews", middleware.AllowRoles("supervisor", "admin"))
+	reviewAdmin.Get("/", controllers.GetAllReviews)
+	reviewAdmin.Delete("/:id", controllers.DeleteReview) // Optional: If needed
+
 	// Ban/Unban Routes
 	adminGroup.Put("/users/:id/ban", controllers.BanUser)
 	adminGroup.Put("/users/:id/unban", controllers.UnbanUser)
 
 	// Broadcast Route
 	adminGroup.Post("/broadcast", controllers.Broadcast)
+
+	// Classroom Admin Routes
+	classroomAdmin := adminGroup.Group("/classrooms", middleware.AllowRoles("supervisor", "admin", "pengajar"))
+	classroomAdmin.Get("/", controllers.GetAllClassrooms)
+	classroomAdmin.Get("/:id", controllers.GetClassroomDetails) // Reuse detail logic
+	classroomAdmin.Post("/members", controllers.AddClassroomMember)
+	classroomAdmin.Delete("/:id/members/:studentId", controllers.RemoveClassroomMember)
+	classroomAdmin.Delete("/assignments/:id", controllers.DeleteAssignment)
+	classroomAdmin.Get("/assignments/:id/submissions", controllers.GetAssignmentSubmissions)
+	classroomAdmin.Put("/:id/teacher", controllers.AssignClassroomTeacher)
 
 	// =============================================================
 

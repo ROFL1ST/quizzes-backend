@@ -9,7 +9,7 @@ import (
 
 // AddReview allows a user to review a quiz
 func AddReview(c *fiber.Ctx) error {
-	user := c.Locals("user").(*models.User)
+	userId := uint(c.Locals("user_id").(float64))
 	quizID := c.Params("id")
 
 	var input struct {
@@ -32,12 +32,12 @@ func AddReview(c *fiber.Ctx) error {
 
 	// Check if user already reviewed
 	var existing models.QuizReview
-	if err := config.DB.Where("user_id = ? AND quiz_id = ?", user.ID, quizID).First(&existing).Error; err == nil {
+	if err := config.DB.Where("user_id = ? AND quiz_id = ?", userId, quizID).First(&existing).Error; err == nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "You have already reviewed this quiz", nil)
 	}
 
 	review := models.QuizReview{
-		UserID:  user.ID,
+		UserID:  userId,
 		QuizID:  quiz.ID,
 		Rating:  input.Rating,
 		Comment: input.Comment,
@@ -60,4 +60,24 @@ func GetReviews(c *fiber.Ctx) error {
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Reviews retrieved", reviews)
+}
+
+// GetAllReviews retrieves all reviews (Admin only)
+func GetAllReviews(c *fiber.Ctx) error {
+	var reviews []models.QuizReview
+	// Preload Quiz and User
+	if err := config.DB.Preload("User").Preload("Quiz").Order("created_at desc").Find(&reviews).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch reviews", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "All reviews retrieved", reviews)
+}
+
+// DeleteReview removes a review (Admin only)
+func DeleteReview(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if err := config.DB.Delete(&models.QuizReview{}, id).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to delete review", err.Error())
+	}
+	return utils.SuccessResponse(c, fiber.StatusOK, "Review deleted successfully", nil)
 }

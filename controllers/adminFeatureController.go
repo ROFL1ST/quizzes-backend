@@ -41,11 +41,12 @@ func UnbanUser(c *fiber.Ctx) error {
 
 // Broadcast creates a system-wide announcement
 func Broadcast(c *fiber.Ctx) error {
-	admin := c.Locals("user").(*models.Admin)
+	userId := uint(c.Locals("user_id").(float64))
 
 	var input struct {
 		Title   string `json:"title"`
 		Content string `json:"content"`
+		Type    string `json:"type"`
 	}
 
 	if err := c.BodyParser(&input); err != nil {
@@ -55,7 +56,8 @@ func Broadcast(c *fiber.Ctx) error {
 	announcement := models.Announcement{
 		Title:     input.Title,
 		Content:   input.Content,
-		CreatorID: admin.ID,
+		Type:      input.Type, // Save type
+		CreatorID: userId,
 		Active:    true,
 	}
 

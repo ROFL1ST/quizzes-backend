@@ -9,7 +9,7 @@ import (
 
 // CreateReport handles the creation of a new report
 func CreateReport(c *fiber.Ctx) error {
-	user := c.Locals("user").(*models.User)
+	userId := uint(c.Locals("user_id").(float64))
 
 	var input struct {
 		TargetID   uint   `json:"target_id"`
@@ -22,7 +22,7 @@ func CreateReport(c *fiber.Ctx) error {
 	}
 
 	report := models.Report{
-		ReporterID: user.ID,
+		ReporterID: userId,
 		TargetID:   input.TargetID,
 		TargetType: input.TargetType,
 		Reason:     input.Reason,
@@ -43,7 +43,70 @@ func GetAllReports(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch reports", err.Error())
 	}
 
-	return utils.SuccessResponse(c, fiber.StatusOK, "Reports retrieved", reports)
+	// Enrich reports with Target Details
+	var userIDs []uint
+	var questionIDs []uint
+
+	for _, r := range reports {
+		if r.TargetType == "user" {
+			userIDs = append(userIDs, r.TargetID)
+		} else if r.TargetType == "question" {
+			questionIDs = append(questionIDs, r.TargetID)
+		}
+	}
+
+	usersMap := make(map[uint]string)
+	questionsMap := make(map[uint]string)
+
+	if len(userIDs) > 0 {
+		var users []models.User
+		config.DB.Where("id IN ?", userIDs).Find(&users)
+		for _, u := range users {
+			usersMap[u.ID] = u.Username
+		}
+	}
+
+	if len(questionIDs) > 0 {
+		var questions []models.Question
+		config.DB.Where("id IN ?", questionIDs).Find(&questions)
+		for _, q := range questions {
+			questionsMap[q.ID] = q.QuestionText
+		}
+	}
+
+	type ReportResponse struct {
+		models.Report
+		TargetDetail string `json:"target_detail"`
+	}
+
+	var response []ReportResponse
+	for _, r := range reports {
+		detail := "-"
+		if r.TargetType == "user" {
+			if val, ok := usersMap[r.TargetID]; ok {
+				detail = val
+			} else {
+				detail = "Unknown User"
+			}
+		} else if r.TargetType == "question" {
+			if val, ok := questionsMap[r.TargetID]; ok {
+				// Truncate if too long
+				if len(val) > 50 {
+					detail = val[:47] + "..."
+				} else {
+					detail = val
+				}
+			} else {
+				detail = "Unknown Question"
+			}
+		}
+		response = append(response, ReportResponse{
+			Report:       r,
+			TargetDetail: detail,
+		})
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Reports retrieved", response)
 }
 
 // ResolveReport updates the status of a report (Admin only)

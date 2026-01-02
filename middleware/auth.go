@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -52,7 +53,7 @@ func Protected() fiber.Handler {
 func AllowRoles(allowedRoles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		userRole := c.Locals("role").(string)
-
+		fmt.Println(userRole)
 		for _, role := range allowedRoles {
 			if role == userRole {
 				return c.Next()
