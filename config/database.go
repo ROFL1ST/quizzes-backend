@@ -80,6 +80,12 @@ func ConnectDB() {
 		&models.Mission{},
 		&models.UserMission{},
 		&models.StreakLog{},
+		&models.Report{},
+		&models.QuizReview{},
+		&models.Classroom{},
+		&models.ClassroomMember{},
+		&models.Assignment{},
+		&models.Announcement{},
 	)
 
 	if err != nil {

@@ -53,3 +53,14 @@ func GetLeaderboardByTopic(c *fiber.Ctx) error {
 	utils.CheckDailyMissions(uint(userID), "social", 1, "view")
 	return utils.SuccessResponse(c, fiber.StatusOK, "Leaderboard retrieved", results)
 }
+
+// GetGlobalLeaderboard retrieves top 20 users by XP
+func GetGlobalLeaderboard(c *fiber.Ctx) error {
+	var users []models.User
+	// Ambil top 20 user sort by xp desc
+	if err := config.DB.Order("xp desc").Limit(20).Find(&users).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch leaderboard", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Global Leaderboard retrieved", users)
+}

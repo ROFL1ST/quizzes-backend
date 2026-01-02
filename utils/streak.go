@@ -1,9 +1,10 @@
 package utils
 
 import (
+	"time"
+
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
-	"time"
 )
 
 func DaysBetween(lastDate time.Time, nowDate time.Time) int {
@@ -24,6 +25,14 @@ func RecordActivity(userID uint) {
 		Count(&exists)
 
 	if exists > 0 {
+
+		var user models.User
+		if err := config.DB.First(&user, userID).Error; err == nil {
+			if user.StreakCount == 0 {
+				user.StreakCount = 1
+				config.DB.Save(&user)
+			}
+		}
 		return
 	}
 
@@ -47,11 +56,9 @@ func RecordActivity(userID uint) {
 		Count(&yesterdayExists)
 
 	if yesterdayExists > 0 {
-
 		user.StreakCount++
 	} else {
-
-		user.StreakCount = 0
+		user.StreakCount = 1 // Start new streak
 	}
 
 	user.LastActivityDate = &now
