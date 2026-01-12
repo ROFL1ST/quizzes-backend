@@ -98,7 +98,7 @@ func SetupRoutes(app *fiber.App) {
 	adminGroup.Put("/users/:id/unban", controllers.UnbanUser)
 
 	// Broadcast Route
-	adminGroup.Post("/broadcast", controllers.Broadcast)
+	adminGroup.Post("/broadcast", middleware.AllowRoles("supervisor", "admin"), controllers.Broadcast)
 
 	// Classroom Admin Routes
 	classroomAdmin := adminGroup.Group("/classrooms", middleware.AllowRoles("supervisor", "admin", "pengajar"))
