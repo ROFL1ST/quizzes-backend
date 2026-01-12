@@ -26,7 +26,10 @@ func RegisterUser(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input data", err.Error())
 	}
 
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to secure password", err.Error())
+	}
 
 	newUser := models.User{
 		Name:     input.Name,
@@ -62,6 +65,9 @@ func LoginUser(c *fiber.Ctx) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Incorrect password", nil)
 	}
+	if user.IsBanned {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Account is banned", nil)
+	}
 
 	claims := jwt.MapClaims{
 		"user_id": user.ID,
@@ -69,7 +75,10 @@ func LoginUser(c *fiber.Ctx) error {
 		"exp":     time.Now().Add(24 * time.Hour).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	t, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	t, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to sign token", err.Error())
+	}
 
 	config.DB.Omit("UserItems").Save(&user)
 
@@ -99,7 +108,10 @@ func RegisterAdmin(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid Role ID", nil)
 	}
 
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to secure password", err.Error())
+	}
 	admin := models.Admin{Name: input.Name, Username: input.Username, Password: string(hashed), RoleID: input.RoleID}
 
 	if err := config.DB.Create(&admin).Error; err != nil {
@@ -134,7 +146,10 @@ func LoginAdmin(c *fiber.Ctx) error {
 		"exp":     time.Now().Add(24 * time.Hour).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	t, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	t, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to sign token", err.Error())
+	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{"token": t, "user": admin, "role": admin.Role.Name})
 }
@@ -150,13 +165,20 @@ func AuthMe(c *fiber.Ctx) error {
 			return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
 		}
 
+		if user.IsBanned {
+			return utils.ErrorResponse(c, fiber.StatusForbidden, "Account is banned", nil)
+		}
+
 		claims := jwt.MapClaims{
 			"user_id": user.ID,
 			"role":    "user",
 			"exp":     time.Now().Add(24 * time.Hour).Unix(),
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		t, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+		t, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+		if err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to sign token", err.Error())
+		}
 
 		var equippedItems []models.Item
 		config.DB.Table("items").
@@ -194,7 +216,10 @@ func AuthMe(c *fiber.Ctx) error {
 			"exp":     time.Now().Add(24 * time.Hour).Unix(),
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		t, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+		t, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+		if err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to sign token", err.Error())
+		}
 
 		return utils.SuccessResponse(c, fiber.StatusOK, "Admin session refreshed", fiber.Map{
 			"token": t,
@@ -225,7 +250,10 @@ func ForgotPassword(c *fiber.Ctx) error {
 	}
 
 	// 1. Generate Token menggunakan Utility
-	token := utils.GenerateToken()
+	token, err := utils.GenerateToken()
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to generate reset token", err.Error())
+	}
 
 	// 2. Simpan ke tabel PasswordReset
 	// Hapus token lama jika ada
@@ -269,7 +297,10 @@ func ResetPassword(c *fiber.Ctx) error {
 	}
 
 	// 2. Hash Password Baru
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(input.NewPassword), 10)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), 10)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to secure password", err.Error())
+	}
 
 	// 3. Update Password User
 	// Kita cari user berdasarkan email yang tersimpan di tabel reset
@@ -306,7 +337,10 @@ func CreateAdmin(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid Role ID", nil)
 	}
 
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to secure password", err.Error())
+	}
 	admin := models.Admin{
 		Name:     input.Name,
 		Username: input.Username,

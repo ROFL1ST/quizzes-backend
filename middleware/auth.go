@@ -35,6 +35,9 @@ func Protected() fiber.Handler {
 		}
 
 		token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
 			return []byte(os.Getenv("JWT_SECRET")), nil
 		})
 
@@ -42,9 +45,23 @@ func Protected() fiber.Handler {
 			return c.Status(401).JSON(fiber.Map{"error": "Invalid Token"})
 		}
 
-		claims := token.Claims.(jwt.MapClaims)
-		c.Locals("user_id", claims["user_id"])
-		c.Locals("role", claims["role"])
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			return c.Status(401).JSON(fiber.Map{"error": "Invalid Token"})
+		}
+
+		userID, ok := claims["user_id"]
+		if !ok {
+			return c.Status(401).JSON(fiber.Map{"error": "Invalid Token"})
+		}
+
+		role, ok := claims["role"].(string)
+		if !ok {
+			return c.Status(401).JSON(fiber.Map{"error": "Invalid Token"})
+		}
+
+		c.Locals("user_id", userID)
+		c.Locals("role", role)
 
 		return c.Next()
 	}
@@ -52,8 +69,10 @@ func Protected() fiber.Handler {
 
 func AllowRoles(allowedRoles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		userRole := c.Locals("role").(string)
-		fmt.Println(userRole)
+		userRole, ok := c.Locals("role").(string)
+		if !ok || userRole == "" {
+			return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+		}
 		for _, role := range allowedRoles {
 			if role == userRole {
 				return c.Next()
