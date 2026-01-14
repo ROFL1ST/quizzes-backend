@@ -62,5 +62,25 @@ func GetGlobalLeaderboard(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch leaderboard", err.Error())
 	}
 
-	return utils.SuccessResponse(c, fiber.StatusOK, "Global Leaderboard retrieved", users)
+	type LeaderboardResponse struct {
+		models.User
+		EquippedItems []models.Item `json:"equipped_items"`
+	}
+
+	var results []LeaderboardResponse
+
+	for _, u := range users {
+		var items []models.Item
+		config.DB.Table("items").
+			Joins("JOIN user_items ON user_items.item_id = items.id").
+			Where("user_items.user_id = ? AND user_items.is_equipped = ?", u.ID, true).
+			Find(&items)
+
+		results = append(results, LeaderboardResponse{
+			User:          u,
+			EquippedItems: items,
+		})
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Global Leaderboard retrieved", results)
 }
