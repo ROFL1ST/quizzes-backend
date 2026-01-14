@@ -24,6 +24,9 @@ func SetupRoutes(app *fiber.App) {
 	api.Post("/forgot-password", controllers.ForgotPassword)
 	api.Post("/reset-password", controllers.ResetPassword)
 
+	// AI Service
+	api.Post("/ai/translate", middleware.Protected(), controllers.TranslateText)
+
 	api.Get("/topics", controllers.GetAllTopics)
 	api.Get("/auth/me", middleware.Protected(), controllers.AuthMe)
 	// Admin Routes
