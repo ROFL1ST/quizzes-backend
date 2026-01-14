@@ -83,8 +83,30 @@ func LoginUser(c *fiber.Ctx) error {
 	config.DB.Omit("UserItems").Save(&user)
 
 	config.DB.Save(&user)
+
 	currentHour := utils.GetJakartaTime().Hour()
 	utils.CheckDailyMissions(user.ID, "login", 0, strconv.Itoa(currentHour))
+
+	// Fix: Recalculate Streak Display (Sync with Daily Info) & Sync DB
+	var lastLog models.StreakLog
+	if err := config.DB.Where("user_id = ?", user.ID).Order("date desc").First(&lastLog).Error; err != nil {
+		if user.StreakCount > 0 {
+			user.StreakCount = 0
+			config.DB.Omit("UserItems").Save(&user)
+		}
+	} else {
+		today := utils.StripTime(utils.GetJakartaTime())
+		diff := utils.DaysBetween(lastLog.Date, today)
+
+		// Jika selisih > 1 hari (artinya ada hari kosong), reset streak
+		if diff > 1 {
+			if user.StreakCount > 0 {
+				user.StreakCount = 0
+				config.DB.Omit("UserItems").Save(&user)
+			}
+		}
+	}
+
 	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{
 		"token": t,
 		"user":  user,
@@ -190,6 +212,25 @@ func AuthMe(c *fiber.Ctx) error {
 
 		currentHour := utils.GetJakartaTime().Hour()
 		utils.CheckDailyMissions(user.ID, "login", 0, strconv.Itoa(currentHour))
+
+		// Fix: Recalculate Streak Display (Sync with Daily Info) & Sync DB
+		var lastLog models.StreakLog
+		if err := config.DB.Where("user_id = ?", user.ID).Order("date desc").First(&lastLog).Error; err != nil {
+			if user.StreakCount > 0 {
+				user.StreakCount = 0
+				config.DB.Omit("UserItems").Save(&user)
+			}
+		} else {
+			today := utils.StripTime(utils.GetJakartaTime())
+			diff := utils.DaysBetween(lastLog.Date, today)
+			if diff > 1 {
+				if user.StreakCount > 0 {
+					user.StreakCount = 0
+					config.DB.Omit("UserItems").Save(&user)
+				}
+			}
+		}
+
 		return utils.SuccessResponse(c, fiber.StatusOK, "User session refreshed", fiber.Map{
 			"token":          t,
 			"user":           user,
