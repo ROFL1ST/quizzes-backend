@@ -12,11 +12,11 @@ import (
 
 func main() {
 	config.ConnectDB()
-	config.SeedDatabase()
-	config.SeedExamData()
-	config.SeedAchievements()
-	config.SeedShopItems()
-	config.SeedDailyData()
+	// config.SeedDatabase()
+	// config.SeedExamData()
+	// config.SeedAchievements()
+	// config.SeedShopItems()
+	// config.SeedDailyData()
 	// config.MigrateOldChallenges()
 	app := fiber.New()
 
