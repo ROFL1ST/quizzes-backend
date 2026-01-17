@@ -1,10 +1,13 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/ROFL1ST/quizzes-backend/controllers"
 	"github.com/ROFL1ST/quizzes-backend/middleware"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 )
 
 func SetupRoutes(app *fiber.App) {
@@ -26,6 +29,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// AI Service
 	api.Post("/ai/translate", middleware.Protected(), controllers.TranslateText)
+	api.Post("/ai/translate-bulk", middleware.Protected(), controllers.TranslateBulk)
 
 	api.Get("/topics", controllers.GetAllTopics)
 	api.Get("/auth/me", middleware.Protected(), controllers.AuthMe)
@@ -99,6 +103,31 @@ func SetupRoutes(app *fiber.App) {
 	// Ban/Unban Routes
 	adminGroup.Put("/users/:id/ban", controllers.BanUser)
 	adminGroup.Put("/users/:id/unban", controllers.UnbanUser)
+
+	// Rate Limiter for Public Translations
+	translationLimiter := limiter.New(limiter.Config{
+		Max:        20,              // 20 requests
+		Expiration: 1 * time.Minute, // per minute
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP() // Limit by IP
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"status":  "error",
+				"message": "Too many requests. Please try again later.",
+			})
+		},
+	})
+
+	// Public Translations with Rate Limiting
+	api.Get("/public/translations", translationLimiter, controllers.GetTranslations)
+
+	// Admin Translations
+	adminGroup.Get("/translations", middleware.AllowRoles("supervisor", "admin"), controllers.GetAdminTranslations)
+	adminGroup.Post("/translations/sync", middleware.AllowRoles("supervisor", "admin"), controllers.SyncTranslations)
+
+	// Logout
+	api.Post("/logout", controllers.Logout)
 
 	// Broadcast Route
 	adminGroup.Post("/broadcast", middleware.AllowRoles("supervisor", "admin"), controllers.Broadcast)

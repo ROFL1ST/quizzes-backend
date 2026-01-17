@@ -23,7 +23,7 @@ func Protected() fiber.Handler {
 		}
 
 		if tokenString == "" {
-			tokenString = c.Cookies("token")
+			tokenString = c.Cookies("jwt")
 		}
 
 		// if tokenString == "" {
