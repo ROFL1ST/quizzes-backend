@@ -107,9 +107,18 @@ func LoginUser(c *fiber.Ctx) error {
 		}
 	}
 
+	// Set Cookie
+	c.Cookie(&fiber.Cookie{
+		Name:     "jwt",
+		Value:    t,
+		Expires:  time.Now().Add(24 * time.Hour),
+		HTTPOnly: true,
+		Secure:   false, // Set true in production
+		SameSite: "Lax",
+	})
+
 	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{
-		"token": t,
-		"user":  user,
+		"user": user,
 	})
 }
 
@@ -173,7 +182,17 @@ func LoginAdmin(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to sign token", err.Error())
 	}
 
-	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{"token": t, "user": admin, "role": admin.Role.Name})
+	// Set Cookie
+	c.Cookie(&fiber.Cookie{
+		Name:     "jwt",
+		Value:    t,
+		Expires:  time.Now().Add(24 * time.Hour),
+		HTTPOnly: true,
+		Secure:   false, // Set true in production
+		SameSite: "Lax",
+	})
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{"user": admin, "role": admin.Role.Name})
 }
 
 func AuthMe(c *fiber.Ctx) error {
@@ -196,11 +215,22 @@ func AuthMe(c *fiber.Ctx) error {
 			"role":    "user",
 			"exp":     time.Now().Add(24 * time.Hour).Unix(),
 		}
+
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		t, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 		if err != nil {
 			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to sign token", err.Error())
 		}
+
+		// Set Cookie
+		c.Cookie(&fiber.Cookie{
+			Name:     "jwt",
+			Value:    t,
+			Expires:  time.Now().Add(24 * time.Hour),
+			HTTPOnly: true,
+			Secure:   false,
+			SameSite: "Lax",
+		})
 
 		var equippedItems []models.Item
 		config.DB.Table("items").
@@ -232,7 +262,6 @@ func AuthMe(c *fiber.Ctx) error {
 		}
 
 		return utils.SuccessResponse(c, fiber.StatusOK, "User session refreshed", fiber.Map{
-			"token":          t,
 			"user":           user,
 			"role":           "user",
 			"equipped_items": equippedItems,
@@ -262,10 +291,19 @@ func AuthMe(c *fiber.Ctx) error {
 			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to sign token", err.Error())
 		}
 
+		// Set Cookie
+		c.Cookie(&fiber.Cookie{
+			Name:     "jwt",
+			Value:    t,
+			Expires:  time.Now().Add(24 * time.Hour),
+			HTTPOnly: true,
+			Secure:   false,
+			SameSite: "Lax",
+		})
+
 		return utils.SuccessResponse(c, fiber.StatusOK, "Admin session refreshed", fiber.Map{
-			"token": t,
-			"user":  admin,
-			"role":  role,
+			"user": admin,
+			"role": role,
 		})
 	}
 }
@@ -394,4 +432,16 @@ func CreateAdmin(c *fiber.Ctx) error {
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusCreated, "Admin created successfully", admin)
+}
+
+func Logout(c *fiber.Ctx) error {
+	c.Cookie(&fiber.Cookie{
+		Name:     "jwt",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour), // Expire immediately
+		HTTPOnly: true,
+		Secure:   false,
+		SameSite: "Lax",
+	})
+	return utils.SuccessResponse(c, fiber.StatusOK, "Logged out successfully", nil)
 }

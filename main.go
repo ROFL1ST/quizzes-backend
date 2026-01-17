@@ -1,6 +1,9 @@
 package main
 
 import (
+	"log"
+	"os"
+
 	"github.com/gofiber/fiber/v2/middleware/logger"
 
 	"github.com/ROFL1ST/quizzes-backend/config"
@@ -21,19 +24,23 @@ func main() {
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "https://quizapp-indo.vercel.app, https://planetpulse-admin-gwcx.vercel.app, http://localhost:5173, http://localhost:3000",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowOrigins:     "https://quizapp-indo.vercel.app, https://planetpulse-admin-gwcx.vercel.app, http://localhost:5173, http://localhost:3000",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
 	}))
 
 	app.Use(logger.New(logger.Config{
 		// Format log custom (optional), defaultnya juga sudah bagus
-		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
+		Format:     "[${time}] ${status} - ${latency} ${method} ${path}\n",
 		TimeFormat: "2006-01-02 15:04:05",
 		TimeZone:   "Asia/Jakarta",
 	}))
 
 	routes.SetupRoutes(app)
 
-	app.Listen(":8000")
-}	
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8000"
+	}
+	log.Fatal(app.Listen(":" + port))
+}

@@ -86,6 +86,7 @@ func ConnectDB() {
 		&models.ClassroomMember{},
 		&models.Assignment{},
 		&models.Announcement{},
+		&models.Translation{},
 	)
 
 	if err != nil {
