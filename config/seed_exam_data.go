@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+
 	"github.com/ROFL1ST/quizzes-backend/models"
 )
 
@@ -174,7 +175,11 @@ func SeedExamData() {
 		},
 	}
 
-	for _, q := range questionsJarkom {
+	for i, q := range questionsJarkom {
+		// Simple random-ish distribution for dev testing
+		// Modulo to cycle difficulties: 0.3, 0.5, 0.7, 0.9, 0.4, 0.6, 0.8...
+		diffs := []float64{0.3, 0.5, 0.7, 0.9, 0.2, 0.4, 0.6, 0.8}
+		q.Difficulty = diffs[i%len(diffs)]
 		DB.Create(&q)
 	}
 
@@ -256,60 +261,63 @@ func SeedExamData() {
 			Hint:          "Otak terlalu penuh informasi.",
 		},
 		{
-			QuizID:       quizIMK.ID,
-			QuestionText: "Apa kepanjangan dari GUI?",
-			Type:         "short_answer",
-			Options:      []string{},
+			QuizID:        quizIMK.ID,
+			QuestionText:  "Apa kepanjangan dari GUI?",
+			Type:          "short_answer",
+			Options:       []string{},
 			CorrectAnswer: "Graphical User Interface",
-			Hint:         "Antarmuka Grafis.",
+			Hint:          "Antarmuka Grafis.",
 		},
 		{
-			QuizID:       quizIMK.ID,
-			QuestionText: "Hukum yang memprediksi waktu untuk menunjuk target disebut Hukum ...",
-			Type:         "short_answer",
-			Options:      []string{},
+			QuizID:        quizIMK.ID,
+			QuestionText:  "Hukum yang memprediksi waktu untuk menunjuk target disebut Hukum ...",
+			Type:          "short_answer",
+			Options:       []string{},
 			CorrectAnswer: "Fitts",
-			Hint:         "Nama orang, diawali huruf F.",
+			Hint:          "Nama orang, diawali huruf F.",
 		},
 
 		// --- TIPE: BENAR / SALAH (BOOLEAN) ---
 		{
-			QuizID:       quizIMK.ID,
-			QuestionText: "Prototyping sebaiknya dilakukan setelah produk selesai dikoding sepenuhnya.",
-			Type:         "boolean",
-			Options:      []string{"Benar", "Salah"},
+			QuizID:        quizIMK.ID,
+			QuestionText:  "Prototyping sebaiknya dilakukan setelah produk selesai dikoding sepenuhnya.",
+			Type:          "boolean",
+			Options:       []string{"Benar", "Salah"},
 			CorrectAnswer: "Salah",
-			Hint:         "Justru dilakukan di awal untuk testing ide.",
+			Hint:          "Justru dilakukan di awal untuk testing ide.",
 		},
 		{
-			QuizID:       quizIMK.ID,
-			QuestionText: "Konsistensi adalah salah satu prinsip utama dalam desain antarmuka.",
-			Type:         "boolean",
-			Options:      []string{"Benar", "Salah"},
+			QuizID:        quizIMK.ID,
+			QuestionText:  "Konsistensi adalah salah satu prinsip utama dalam desain antarmuka.",
+			Type:          "boolean",
+			Options:       []string{"Benar", "Salah"},
 			CorrectAnswer: "Benar",
-			Hint:         "Agar user tidak bingung.",
+			Hint:          "Agar user tidak bingung.",
 		},
 
 		// --- TIPE: MULTI SELECT (JAWABAN > 1) ---
 		{
-			QuizID:       quizIMK.ID,
-			QuestionText: "Pilih komponen Usability menurut Nielsen:",
-			Type:         "multi_select",
-			Options:      []string{"Learnability", "Efficiency", "Coding Speed", "Memorability"},
+			QuizID:        quizIMK.ID,
+			QuestionText:  "Pilih komponen Usability menurut Nielsen:",
+			Type:          "multi_select",
+			Options:       []string{"Learnability", "Efficiency", "Coding Speed", "Memorability"},
 			CorrectAnswer: `["Learnability", "Efficiency", "Memorability"]`, // Format JSON String
-			Hint:         "Kecepatan ngoding bukan urusan user.",
+			Hint:          "Kecepatan ngoding bukan urusan user.",
 		},
 		{
-			QuizID:       quizIMK.ID,
-			QuestionText: "Manakah yang termasuk jenis ragam dialog?",
-			Type:         "multi_select",
-			Options:      []string{"Command Line", "Direct Manipulation", "Backend Processing", "Menu Selection"},
+			QuizID:        quizIMK.ID,
+			QuestionText:  "Manakah yang termasuk jenis ragam dialog?",
+			Type:          "multi_select",
+			Options:       []string{"Command Line", "Direct Manipulation", "Backend Processing", "Menu Selection"},
 			CorrectAnswer: `["Command Line", "Direct Manipulation", "Menu Selection"]`,
-			Hint:         "Cara user berinteraksi, bukan proses belakang layar.",
+			Hint:          "Cara user berinteraksi, bukan proses belakang layar.",
 		},
 	}
 
-	for _, q := range questionsIMK {
+	for i, q := range questionsIMK {
+		// Cycle difficulties
+		diffs := []float64{0.2, 0.4, 0.6, 0.8, 0.3, 0.5, 0.7, 0.9}
+		q.Difficulty = diffs[i%len(diffs)]
 		DB.Create(&q)
 	}
 

@@ -18,16 +18,17 @@ import (
 )
 
 type CreateHistoryInput struct {
-	QuizID       uint            `json:"quiz_id" validate:"required"`
-	QuizTitle    string          `json:"quiz_title"`
-	Score        int             `json:"score"`
-	TotalSoal    int             `json:"total_soal"`
-	Snapshot     json.RawMessage `json:"snapshot"`
-	TimeTaken    int             `json:"time_taken"`
-	ChallengeID  uint            `json:"challenge_id"`
-	QuestionIDs  []uint          `json:"question_ids"`
-	AssignmentID *uint           `json:"assignment_id"` // New
-	ClassroomID  *uint           `json:"classroom_id"`  // New
+	QuizID              uint            `json:"quiz_id" validate:"required"`
+	QuizTitle           string          `json:"quiz_title"`
+	Score               int             `json:"score"`
+	TotalSoal           int             `json:"total_soal"`
+	Snapshot            json.RawMessage `json:"snapshot"`
+	TimeTaken           int             `json:"time_taken"`
+	ChallengeID         uint            `json:"challenge_id"`
+	QuestionIDs         []uint          `json:"question_ids"`
+	AssignmentID        *uint           `json:"assignment_id"` // New
+	ClassroomID         *uint           `json:"classroom_id"`  // New
+	FinalAdaptiveRating *float64        `json:"final_adaptive_rating"`
 }
 
 func SaveHistory(c *fiber.Ctx) error {
@@ -320,6 +321,42 @@ func SaveHistory(c *fiber.Ctx) error {
 	utils.RecordActivity(uint(userID))
 	utils.CheckDailyMissions(currentUser.ID, "quiz", finalScore, history.QuizTitle)
 	utils.CheckDailyMissions(currentUser.ID, "level", finalScore, "xp_gain")
+
+	// E. Update User Adaptivity (Sync with DB)
+	go func(uid uint, inputRating *float64, score int) {
+		var userAdaptivity models.UserAdaptivity
+		// Cari atau Buat baru (Default 0.5)
+		if err := config.DB.FirstOrCreate(&userAdaptivity, models.UserAdaptivity{UserID: uid}).Error; err != nil {
+			return
+		}
+
+		// 1. Jika dari Adaptive Mode (Client kirim nilai final)
+		if inputRating != nil {
+			userAdaptivity.AdaptiveRating = *inputRating
+			userAdaptivity.LastDiff = *inputRating
+			userAdaptivity.Confidence += 0.05 // Increment confidence
+		} else {
+			// 2. Jika dari Classic Mode (Reward/Punishment)
+			// Hanya update jika confidence masih rendah atau sebagai penyesuaian kecil
+			change := 0.0
+			if score >= 85 {
+				change = 0.02 // Naik dikit
+			} else if score <= 40 {
+				change = -0.01 // Turun dikit
+			}
+
+			newRating := userAdaptivity.AdaptiveRating + change
+			if newRating > 1.0 {
+				newRating = 1.0
+			}
+			if newRating < 0.1 {
+				newRating = 0.1
+			}
+			userAdaptivity.AdaptiveRating = newRating
+		}
+		userAdaptivity.UpdatedAt = time.Now()
+		config.DB.Save(&userAdaptivity)
+	}(uint(userID), input.FinalAdaptiveRating, finalScore)
 
 	return utils.SuccessResponse(c, fiber.StatusCreated, "History saved", history)
 }

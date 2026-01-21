@@ -387,8 +387,9 @@ func StartGameRealtime(c *fiber.Ctx) error {
 	id := c.Params("id")
 	userID := uint(c.Locals("user_id").(float64))
 
+	// Preload Participants to get their IDs
 	var challenge models.Challenge
-	if err := config.DB.First(&challenge, id).Error; err != nil {
+	if err := config.DB.Preload("Participants").First(&challenge, id).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Challenge not found", nil)
 	}
 
@@ -425,16 +426,39 @@ func StartGameRealtime(c *fiber.Ctx) error {
 		"seed":    seed,           // Kirim seed di awal (opsional) atau pas start
 	})
 
+	// Calculate Min Adaptive Rating
+	initialDiff := 0.5
+	if challenge.Mode == "survival" || challenge.Mode == "1v1" {
+		minR := 1.0
+		found := false
+		for _, p := range challenge.Participants {
+			if p.Status != "accepted" {
+				continue
+			}
+			var ua models.UserAdaptivity
+			if err := config.DB.First(&ua, p.UserID).Error; err == nil {
+				if ua.AdaptiveRating < minR {
+					minR = ua.AdaptiveRating
+				}
+				found = true
+			}
+		}
+		if found {
+			initialDiff = minR
+		}
+	}
+
 	// 3. Goroutine untuk kirim sinyal 'GO' setelah 3 detik
-	go func(chID uint, quizID uint, chMode string, chSeed string) {
+	go func(chID uint, quizID uint, chMode string, chSeed string, initDiff float64) {
 		time.Sleep(3 * time.Second)
 		utils.BroadcastLobby(chID, "game_start", fiber.Map{
-			"quiz_id": quizID,
-			"message": "Game Started!",
-			"seed":    chSeed, // PENTING: Seed dikirim saat game start
-			"mode":    chMode,
+			"quiz_id":            quizID,
+			"message":            "Game Started!",
+			"seed":               chSeed,
+			"mode":               chMode,
+			"initial_difficulty": initDiff, // Send min rating
 		})
-	}(challenge.ID, quizIDVal, challenge.Mode, seed)
+	}(challenge.ID, quizIDVal, challenge.Mode, seed, initialDiff)
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Countdown started", nil)
 }

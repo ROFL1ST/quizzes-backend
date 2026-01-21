@@ -16,6 +16,7 @@ type Question struct {
 	Type           string         `json:"type" gorm:"default:'mcq'"`
 	CorrectCount   int            `json:"correct_count" gorm:"default:0"`
 	IncorrectCount int            `json:"incorrect_count" gorm:"default:0"`
+	Difficulty     float64        `json:"difficulty" gorm:"default:0.5"` // 0.0 to 1.0
 }
 
 type QuestionAnalysis struct {

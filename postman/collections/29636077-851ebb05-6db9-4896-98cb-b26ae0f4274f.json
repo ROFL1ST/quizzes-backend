@@ -554,6 +554,48 @@
 						"header": []
 					},
 					"response": []
+				},
+				{
+					"name": "Get Next Adaptive Question",
+					"id": "29636077-adaptive-quiz-0001",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{user_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quiz_id\": 1,\n    \"answers\": [\n        {\"question_id\": 10, \"user_answer\": \"Interaksi Manusia Komputer\"}\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/quiz/adaptive/next",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"quiz",
+								"adaptive",
+								"next"
+							]
+						}
+					},
+					"response": []
 				}
 			],
 			"id": "29636077-44365fea-dcee-4075-9321-ca8e74ecae8b"

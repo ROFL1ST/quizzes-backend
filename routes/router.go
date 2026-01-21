@@ -83,6 +83,9 @@ func SetupRoutes(app *fiber.App) {
 	questionGroup.Post("/bulk", controllers.BulkUploadQuestions)
 	questionGroup.Put("/:id", controllers.UpdateQuestionAdmin)
 	questionGroup.Delete("/:id", middleware.AllowRoles("supervisor", "admin"), controllers.DeleteQuestionAdmin)
+	// Dev/Test Route
+	questionGroup.Post("/randomize-difficulty", controllers.RandomizeDifficulty)
+	questionGroup.Post("/recalculate-difficulty", controllers.RecalculateDifficulty)
 
 	// shop routes admin
 	shopAdmin := adminGroup.Group("/shop", middleware.AllowRoles("supervisor", "admin"))
@@ -147,6 +150,7 @@ func SetupRoutes(app *fiber.App) {
 	// User Routes
 	api.Get("/topics/:slug/quizzes", middleware.Protected(), controllers.GetQuizzesByTopicSlug)
 	api.Get("/quizzes/:id/questions", middleware.Protected(), controllers.GetQuestionsByQuizID)
+	api.Post("/quiz/adaptive/next", middleware.Protected(), controllers.GetNextAdaptiveQuestion)
 
 	history := api.Group("/history", middleware.Protected())
 	history.Post("/", controllers.SaveHistory)
@@ -192,6 +196,7 @@ func SetupRoutes(app *fiber.App) {
 	userGroup.Post("/share", controllers.ShareProfileTrigger)
 	userGroup.Get("/analytics/smart", controllers.GetUserSmartAnalytics)
 	userGroup.Get("/activity/calendar", controllers.GetActivityCalendar)
+	userGroup.Get("/adaptivity", controllers.GetAdaptivity)
 
 	// Shop Routes
 	shopGroup := api.Group("/shop", middleware.Protected())
