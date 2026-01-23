@@ -18,7 +18,7 @@ import (
 )
 
 type CreateHistoryInput struct {
-	QuizID              uint            `json:"quiz_id" validate:"required"`
+	QuizID              uint            `json:"quiz_id"`
 	QuizTitle           string          `json:"quiz_title"`
 	Score               int             `json:"score"`
 	TotalSoal           int             `json:"total_soal"`

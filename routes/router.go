@@ -175,12 +175,16 @@ func SetupRoutes(app *fiber.App) {
 	// Challenge Routes
 	challenges := api.Group("/challenges", middleware.Protected())
 	challenges.Post("/", controllers.CreateChallenge)
+	challenges.Post("/join", controllers.JoinChallengeByCode) // New
 	challenges.Get("/", controllers.GetMyChallenges)
 	challenges.Post("/:id/accept", controllers.AcceptChallenge)
 	challenges.Post("/:id/refuse", controllers.RejectChallenge)
+	challenges.Put("/:id/settings", controllers.UpdateLobbySettings) // New
 	challenges.Get("/:id/lobby-stream", controllers.StreamChallengeLobby)
 	challenges.Post("/:id/start", controllers.StartGameRealtime)
 	challenges.Post("/:id/progress", controllers.UpdateChallengeProgress)
+	challenges.Post("/:id/invite", controllers.InviteToLobby)  // NEW
+	challenges.Post("/:id/code", controllers.GenerateRoomCode) // NEW
 	challenges.Post("/:id/leave", controllers.LeaveLobby)
 
 	// Activity Feed

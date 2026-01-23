@@ -16,8 +16,9 @@ type Challenge struct {
 	Status       string                 `json:"status" gorm:"default:'pending'"` // pending, active, finished
 	Participants []ChallengeParticipant `json:"participants" gorm:"foreignKey:ChallengeID"`
 	WagerAmount  int                    `json:"wager_amount" gorm:"default:0"`
-	WinnerID     *uint                  `json:"winner_id"`    // Nullable (Pointer) karena bisa DRAW atau Team Win
-	WinningTeam  string                 `json:"winning_team"` // "A", "B", atau "DRAW" (Khusus 2v2)
+	WinnerID     *uint                  `json:"winner_id"`                     // Nullable (Pointer) karena bisa DRAW atau Team Win
+	WinningTeam  string                 `json:"winning_team"`                  // "A", "B", atau "DRAW" (Khusus 2v2)
+	RoomCode     string                 `json:"room_code" gorm:"unique;index"` // Kode Room Unik (6 Digit)
 }
 
 type ChallengeParticipant struct {
