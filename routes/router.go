@@ -55,6 +55,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// quiz admin routes
 	adminGroup.Get("/users", controllers.GetAllUsers)
+	adminGroup.Get("/admins", controllers.GetAllAdmins)
 	quizzesAdmin := adminGroup.Group("/quizzes", middleware.AllowRoles("supervisor", "admin", "pengajar"))
 	quizzesAdmin.Get("/", controllers.GetAllQuizzesAdmin)
 	quizzesAdmin.Post("/", controllers.CreateQuiz)

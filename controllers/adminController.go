@@ -182,11 +182,35 @@ func GetDashboardAnalytics(c *fiber.Ctx) error {
 }
 
 func GetAllUsers(c *fiber.Ctx) error {
+	params := utils.GetPaginationParams(c)
 	var users []models.User
-	if err := config.DB.Order("created_at desc").Find(&users).Error; err != nil {
+	var total int64
+
+	if err := config.DB.Model(&models.User{}).Count(&total).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to count users", nil)
+	}
+
+	if err := config.DB.Order("created_at desc").Limit(params.PageSize).Offset(params.Offset).Find(&users).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch users", nil)
 	}
-	return utils.SuccessResponse(c, fiber.StatusOK, "Users retrieved", users)
+
+	return utils.PaginatedSuccessResponse(c, fiber.StatusOK, "Users retrieved", users, total, params)
+}
+
+func GetAllAdmins(c *fiber.Ctx) error {
+	params := utils.GetPaginationParams(c)
+	var admins []models.Admin
+	var total int64
+
+	if err := config.DB.Model(&models.Admin{}).Count(&total).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to count admins", nil)
+	}
+
+	if err := config.DB.Preload("Role").Order("created_at desc").Limit(params.PageSize).Offset(params.Offset).Find(&admins).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch admins", nil)
+	}
+
+	return utils.PaginatedSuccessResponse(c, fiber.StatusOK, "Admins retrieved", admins, total, params)
 }
 
 // ========== TOPICS WITH PAGINATION ==========
@@ -500,6 +524,14 @@ func BulkUploadQuestions(c *fiber.Ctx) error {
 			correct = string(jsonBytes)
 		}
 
+		// Difficulty (Col 5, optional)
+		difficulty := 0.5
+		if len(row) > 5 {
+			if val, err := strconv.ParseFloat(strings.TrimSpace(row[5]), 64); err == nil {
+				difficulty = val
+			}
+		}
+
 		q := models.Question{
 			QuizID:        uint(quizID),
 			QuestionText:  row[0],
@@ -507,6 +539,7 @@ func BulkUploadQuestions(c *fiber.Ctx) error {
 			Options:       pq.StringArray(options),
 			CorrectAnswer: correct,
 			Hint:          row[4],
+			Difficulty:    difficulty,
 		}
 		questions = append(questions, q)
 	}
