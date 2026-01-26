@@ -63,7 +63,9 @@ func (c *MLClient) GetRecommendation(userID, quizID uint, history []UserHistoryI
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ml-service returned status: %d", resp.StatusCode)
+		var errorBody map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&errorBody)
+		return nil, fmt.Errorf("ml-service returned status: %d, body: %v", resp.StatusCode, errorBody)
 	}
 
 	var result RecommendationResponse

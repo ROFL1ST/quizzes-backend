@@ -1,4 +1,4 @@
 @echo off
-start cmd /k "cd ml-service && uvicorn main:app --reload --port 5002"
-echo Starting Go Server...
-go run main.go
+start "ML Service" "d:\punya_abang\ml-service\start_ml.bat"
+echo Starting Go Server with Air...
+air

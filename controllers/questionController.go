@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strings"
 
@@ -64,7 +65,7 @@ func GetNextAdaptiveQuestion(c *fiber.Ctx) error {
 	}
 
 	// 1. Reconstruct History and Calculate Accuracy/Difficulty so far
-	var history []utils.UserHistoryItem
+	history := make([]utils.UserHistoryItem, 0)
 	answeredIDs := make(map[uint]bool)
 
 	for _, ans := range req.Answers {
@@ -115,11 +116,16 @@ func GetNextAdaptiveQuestion(c *fiber.Ctx) error {
 				IsCorrect:  isCorrect,
 				Difficulty: q.Difficulty,
 			})
+			fmt.Printf("Grading QID: %d | UserAns: %s | CorrectAns: %s | isCorrect: %v\n", q.ID, ans.UserAnswer, q.CorrectAnswer, isCorrect)
 		}
 	}
 
 	// 2. Call ML Service
-	mlClient := utils.NewMLClient("http://localhost:5002")
+	mlURL := os.Getenv("ML_SERVICE_URL")
+	if mlURL == "" {
+		mlURL = "http://localhost:5002"
+	}
+	mlClient := utils.NewMLClient(mlURL)
 
 	// Helper to get Prior Ability (Adaptive Rating)
 	var priorAbility *float64
