@@ -49,7 +49,8 @@ func GetQuestionsByQuizID(c *fiber.Ctx) error {
 
 // Request structure for adaptive question
 type AdaptiveRequest struct {
-	QuizID  uint `json:"quiz_id"`
+	QuizID  uint   `json:"quiz_id"`
+	Type    string `json:"type"` // "essay", "mcq", etc.
 	Answers []struct {
 		QuestionID uint   `json:"question_id"`
 		UserAnswer string `json:"user_answer"`
@@ -61,12 +62,16 @@ func GetNextAdaptiveQuestion(c *fiber.Ctx) error {
 
 	var req AdaptiveRequest
 	if err := c.BodyParser(&req); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid Input", err.Error())
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body", err.Error())
 	}
 
 	// 1. Reconstruct History and Calculate Accuracy/Difficulty so far
 	history := make([]utils.UserHistoryItem, 0)
 	answeredIDs := make(map[uint]bool)
+
+	// Variables for Essay Feedback
+	var lastEssayScore *float64
+	var lastEssayFeedback string
 
 	for _, ans := range req.Answers {
 		answeredIDs[ans.QuestionID] = true
@@ -78,12 +83,12 @@ func GetNextAdaptiveQuestion(c *fiber.Ctx) error {
 			// Robust Grading Logic
 			isCorrect := false
 			switch q.Type {
-			case "short_answer":
+			case models.QuestionTypeShortAnswer:
 				// Case Insensitive & Trim Space
 				if strings.TrimSpace(strings.ToLower(ans.UserAnswer)) == strings.TrimSpace(strings.ToLower(q.CorrectAnswer)) {
 					isCorrect = true
 				}
-			case "multi_select":
+			case models.QuestionTypeMultiSelect:
 				var userAns []string
 				var correctAns []string
 				err1 := json.Unmarshal([]byte(ans.UserAnswer), &userAns)
@@ -104,6 +109,45 @@ func GetNextAdaptiveQuestion(c *fiber.Ctx) error {
 						}
 					}
 				}
+			case models.QuestionTypeEssay:
+				// OPTIMIZATION: Only hit AI if the current request is for an essay
+				// This prevents re-grading old essays (which is expensive)
+				// and prevents "lastEssayFeedback" from polluting MCQ responses.
+				if req.Type == "essay" {
+					// Real-time AI Grading for Adaptive Logic
+					mlClientTemp := utils.NewMLClient(os.Getenv("ML_SERVICE_URL"))
+					if os.Getenv("ML_SERVICE_URL") == "" {
+						mlClientTemp = utils.NewMLClient("http://localhost:5002")
+					}
+
+					gradeResp, err := mlClientTemp.GradeEssay(q.QuestionText, q.CorrectAnswer, ans.UserAnswer)
+					if err == nil && gradeResp != nil {
+						// Use 70 as passing threshold for adaptive logic
+						if gradeResp.ScoreFinal >= 70 {
+							isCorrect = true
+						}
+
+						// Capture for response
+						score := gradeResp.ScoreFinal
+						lastEssayScore = &score
+						lastEssayFeedback = gradeResp.Feedback
+
+						fmt.Printf("[Adaptive] Essay Graded. Score: %.2f => Correct: %v\n", gradeResp.ScoreFinal, isCorrect)
+					} else {
+						fmt.Println("[Adaptive] Failed to grade essay:", err)
+						isCorrect = true // Fallback: assume correct to avoid penalty if service down?
+					}
+				} else {
+					// Skip AI Grading for old essays during MCQ request
+					// Assume false or keep previous state?
+					// Ideally we should persist isCorrect in frontend payload, but for now fallback false/true?
+					// Let's assume correct to be safe? Or false?
+					// False might make it seem user is failing. True might make it too easy.
+					// Let's stick to 'false' (safe) but realize this limits history accuracy.
+					// Actually, if we skip, we just don't set lastEssayScore.
+					// isCorrect defaults to false.
+				}
+
 			default:
 				// mcq, boolean
 				if ans.UserAnswer == q.CorrectAnswer {
@@ -180,6 +224,8 @@ func GetNextAdaptiveQuestion(c *fiber.Ctx) error {
 			}
 			return nil
 		}(),
+		"last_essay_score":    lastEssayScore,
+		"last_essay_feedback": lastEssayFeedback,
 		"prediction_msg": func() string {
 			if recommendation != nil {
 				return recommendation.Message

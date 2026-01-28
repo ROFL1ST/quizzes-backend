@@ -19,7 +19,7 @@ func SeedExamData() {
 	topicJarkom := models.Topic{Slug: "jarkom", Title: "Jaringan Komputer", Description: "TCP/IP, HTTP, DNS, dan Layer OSI"}
 	DB.Create(&topicJarkom)
 
-	quizJarkom := models.Quiz{TopicID: topicJarkom.ID, Title: "UTS JarKom (Latihan)", Description: "Kumpulan soal UTS Jaringan Komputer"}
+	quizJarkom := models.Quiz{TopicID: &topicJarkom.ID, Title: "UTS JarKom (Latihan)", Description: "Kumpulan soal UTS Jaringan Komputer"}
 	DB.Create(&quizJarkom)
 
 	questionsJarkom := []models.Question{
@@ -186,7 +186,7 @@ func SeedExamData() {
 	topicIMK := models.Topic{Slug: "imk", Title: "Interaksi Manusia & Komputer", Description: "Usability, UX, dan Design Principle"}
 	DB.Create(&topicIMK)
 
-	quizIMK := models.Quiz{TopicID: topicIMK.ID, Title: "Kuis IMK Dasar", Description: "Konsep dasar IMK"}
+	quizIMK := models.Quiz{TopicID: &topicIMK.ID, Title: "Kuis IMK Dasar", Description: "Konsep dasar IMK"}
 	DB.Create(&quizIMK)
 
 	questionsIMK := []models.Question{

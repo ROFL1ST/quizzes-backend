@@ -296,12 +296,38 @@ func GetAllQuizzesAdmin(c *fiber.Ctx) error {
 	var total int64
 
 	// Hitung total data
-	if err := config.DB.Model(&models.Quiz{}).Count(&total).Error; err != nil {
+	query := config.DB.Model(&models.Quiz{})
+
+	// 1. Filter by Classroom (Strict)
+	if classroomID := c.Query("classroom_id"); classroomID != "" {
+		query = query.Where("classroom_id = ?", classroomID)
+	} else {
+		// 2. Global Context
+		onlyGlobal := c.Query("only_global") == "true"
+		role := c.Locals("role").(string)
+
+		if onlyGlobal {
+			// Explicitly requested Global Only
+			query = query.Where("topic_id IS NOT NULL")
+		} else {
+			// Default Behavior depends on Role
+			if role == "admin" || role == "supervisor" {
+				// Admin sees EVERYTHING (Global + All Classroom Quizzes)
+				// No filter needed
+			} else {
+				// Teachers/User see only Global Quizzes in the main list
+				// To avoid cluttering with other people's class quizzes
+				query = query.Where("topic_id IS NOT NULL")
+			}
+		}
+	}
+
+	if err := query.Count(&total).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to count quizzes", nil)
 	}
 
 	// Ambil data dengan pagination
-	if err := config.DB.
+	if err := query.
 		Preload("Topic").
 		Order("created_at desc").
 		Limit(params.PageSize).
@@ -586,4 +612,49 @@ func DeleteShopItem(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed delete item", err.Error())
 	}
 	return utils.SuccessResponse(c, fiber.StatusOK, "Item deleted", nil)
+}
+
+type CopyQuestionsInput struct {
+	TargetQuizID uint   `json:"target_quiz_id"`
+	QuestionIDs  []uint `json:"question_ids"`
+}
+
+func CopyQuestions(c *fiber.Ctx) error {
+	var input CopyQuestionsInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
+	}
+
+	if input.TargetQuizID == 0 || len(input.QuestionIDs) == 0 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Target Quiz and Questions are required", nil)
+	}
+
+	var sourceQuestions []models.Question
+	if err := config.DB.Where("id IN ?", input.QuestionIDs).Find(&sourceQuestions).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch source questions", err.Error())
+	}
+
+	var newQuestions []models.Question
+	for _, q := range sourceQuestions {
+		newQ := models.Question{
+			QuizID:        input.TargetQuizID,
+			QuestionText:  q.QuestionText,
+			Type:          q.Type,
+			Options:       q.Options,
+			CorrectAnswer: q.CorrectAnswer,
+			Hint:          q.Hint,
+			Difficulty:    q.Difficulty,
+			// ID will be auto-generated
+			// CreatedAt/UpdatedAt auto-generated
+		}
+		newQuestions = append(newQuestions, newQ)
+	}
+
+	if len(newQuestions) > 0 {
+		if err := config.DB.Create(&newQuestions).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to copy questions", err.Error())
+		}
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusCreated, fmt.Sprintf("%d questions copied successfully", len(newQuestions)), nil)
 }

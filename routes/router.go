@@ -33,6 +33,7 @@ func SetupRoutes(app *fiber.App) {
 
 	api.Get("/topics", controllers.GetAllTopics)
 	api.Get("/auth/me", middleware.Protected(), controllers.AuthMe)
+	api.Get("/admin/me", middleware.Protected(), controllers.AuthMe) // New: Dedicated Admin Profile
 	// Admin Routes
 	adminGroup := api.Group("/admin", middleware.Protected())
 
@@ -40,6 +41,7 @@ func SetupRoutes(app *fiber.App) {
 	adminGroup.Post("/create-admin", middleware.AllowRoles("supervisor"), controllers.CreateAdmin)
 
 	adminGroup.Get("/analytics", middleware.AllowRoles("supervisor", "admin"), controllers.GetDashboardAnalytics)
+	adminGroup.Get("/health", middleware.AllowRoles("supervisor", "admin"), controllers.GetSystemHealth) // New Health Check
 
 	// config
 	configGroup := adminGroup.Group("/config", middleware.AllowRoles("supervisor"))
@@ -130,8 +132,10 @@ func SetupRoutes(app *fiber.App) {
 	adminGroup.Get("/translations", middleware.AllowRoles("supervisor", "admin"), controllers.GetAdminTranslations)
 	adminGroup.Post("/translations/sync", middleware.AllowRoles("supervisor", "admin"), controllers.SyncTranslations)
 
-	// Logout
+	// Logout (User)
 	api.Post("/logout", controllers.Logout)
+	// Logout (Admin)
+	api.Post("/admin/logout", controllers.LogoutAdmin)
 
 	// Broadcast Route
 	adminGroup.Post("/broadcast", middleware.AllowRoles("supervisor", "admin"), controllers.Broadcast)

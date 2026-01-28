@@ -739,8 +739,80 @@
 					},
 					"response": []
 				}
-			],
-			"id": "29636077-b147341c-5578-4bd3-a5e7-423a1de8ccb2"
+			]
+		},
+		{
+			"name": "5. AI Features (Research)",
+			"id": "29636077-ai-research-folder",
+			"item": [
+				{
+					"name": "Grade Essay (Direct ML)",
+					"id": "29636077-grade-essay-req",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"question_text\": \"Jelaskan fungsi Jantung.\",\n    \"teacher_key\": \"Jantung berfungsi memompa darah ke seluruh tubuh.\",\n    \"student_answer\": \"Jantung adalah organ yang memompa darah.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:5002/grade-essay",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5002",
+							"path": [
+								"grade-essay"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Quiz (With Essay)",
+					"id": "29636077-submit-essay-req",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{user_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quiz_id\": 1,\n    \"quiz_title\": \"Kuis Biologi\",\n    \"score\": 0,\n    \"total_soal\": 1,\n    \"snapshot\": {\n        \"101\": \"Jantung memompa darah\"\n    },\n    \"time_taken\": 120\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/history",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"history"
+							]
+						},
+						"description": "Pastikan ID soal 101 ada di DB dan tipenya 'essay'."
+					},
+					"response": []
+				}
+			]
 		}
 	],
 	"variable": [

@@ -5,6 +5,14 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	QuestionTypeMCQ         = "mcq"
+	QuestionTypeEssay       = "essay"
+	QuestionTypeShortAnswer = "short_answer"
+	QuestionTypeBoolean     = "boolean"
+	QuestionTypeMultiSelect = "multi_select"
+)
+
 type Question struct {
 	gorm.Model
 	QuizID         uint           `json:"quiz_id"`

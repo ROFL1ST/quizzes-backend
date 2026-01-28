@@ -27,6 +27,18 @@ type RecommendationResponse struct {
 	Message          string  `json:"message"`
 }
 
+type EssayGradingRequest struct {
+	QuestionText  string `json:"question_text"`
+	TeacherKey    string `json:"teacher_key"`
+	StudentAnswer string `json:"student_answer"`
+}
+
+type EssayGradingResponse struct {
+	ScoreFinal float64                `json:"score_final"`
+	Feedback   string                 `json:"feedback"`
+	Debug      map[string]interface{} `json:"debug"`
+}
+
 // MLClient handles communication with the Python ML Service
 type MLClient struct {
 	BaseURL    string
@@ -69,6 +81,39 @@ func (c *MLClient) GetRecommendation(userID, quizID uint, history []UserHistoryI
 	}
 
 	var result RecommendationResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (c *MLClient) GradeEssay(questionText, teacherKey, studentAnswer string) (*EssayGradingResponse, error) {
+	reqBody := EssayGradingRequest{
+		QuestionText:  questionText,
+		TeacherKey:    teacherKey,
+		StudentAnswer: studentAnswer,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%s/grade-essay", c.BaseURL)
+	resp, err := c.HTTPClient.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errorBody map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&errorBody)
+		return nil, fmt.Errorf("ml-service grade-essay returned status: %d, body: %v", resp.StatusCode, errorBody)
+	}
+
+	var result EssayGradingResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}

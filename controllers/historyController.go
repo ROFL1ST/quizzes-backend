@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"math"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,9 +40,14 @@ func SaveHistory(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid data", err.Error())
 	}
 
-	// =================================================================
-	// 1. LOGIKA PENILAIAN (GRADING)
-	// =================================================================
+	// Init ML Client for AI Grading
+	mlURL := os.Getenv("ML_SERVICE_URL")
+	if mlURL == "" {
+		mlURL = "http://localhost:5002"
+	}
+	mlClient := utils.NewMLClient(mlURL)
+	var essaySubmissions []models.EssaySubmission
+
 	var questions []models.Question
 	if input.QuizID != 0 {
 		// Kuis Normal
@@ -74,6 +80,38 @@ func SaveHistory(c *fiber.Ctx) error {
 			isCorrect := false
 
 			switch q.Type {
+			case "essay":
+				// AI Grading (Research Feature)
+				aiResp, err := mlClient.GradeEssay(q.QuestionText, q.CorrectAnswer, answer)
+				score := 0.0
+				feedback := "Error connecting to AI"
+
+				if err == nil && aiResp != nil {
+					score = aiResp.ScoreFinal
+					feedback = aiResp.Feedback
+				} else {
+					// Fallback if AI fails: check non-empty
+					if len(answer) > 5 {
+						score = 50.0 // Give half points for effort if AI down
+						feedback = "AI Service Unavailable (Fallback)"
+					}
+				}
+
+				// Threshold for "Correct" in boolean strict sense (e.g. for progression)
+				if score >= 70.0 {
+					isCorrect = true
+				}
+
+				// Queue for saving later
+				essaySubmissions = append(essaySubmissions, models.EssaySubmission{
+					QuestionID: q.ID,
+					UserAnswer: answer,
+					TeacherKey: q.CorrectAnswer,
+					AIScore:    score,
+					AIFeedback: feedback,
+					IsGraded:   true,
+				})
+
 			case "short_answer":
 				// Case Insensitive & Trim Space
 				userAns := strings.ToLower(strings.TrimSpace(answer))
@@ -150,6 +188,14 @@ func SaveHistory(c *fiber.Ctx) error {
 
 	if err := config.DB.Create(&history).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed save history", err.Error())
+	}
+
+	// Save Buffered Essay Submissions
+	if len(essaySubmissions) > 0 {
+		for i := range essaySubmissions {
+			essaySubmissions[i].HistoryID = history.ID
+			config.DB.Create(&essaySubmissions[i])
+		}
 	}
 
 	// A. Update Misi Harian
@@ -438,14 +484,23 @@ func GetHistoryByID(c *fiber.Ctx) error {
 			}
 		}
 	}
+
+	// Fetch Essay Submissions (AI Feedback) if any
+	var essaySubmissions []models.EssaySubmission
+	if err := config.DB.Where("history_id = ?", history.ID).Find(&essaySubmissions).Error; err != nil {
+		// Log error but don't fail request
+		// fmt.Println("Error fetching essay submissions:", err)
+	}
+
 	response := fiber.Map{
-		"id":         history.ID,
-		"quiz_title": history.QuizTitle,
-		"score":      history.Score,
-		"snapshot":   history.Snapshot,
-		"time_taken": history.TimeTaken,
-		"questions":  questions,
-		"created_at": history.CreatedAt,
+		"id":                history.ID,
+		"quiz_title":        history.QuizTitle,
+		"score":             history.Score,
+		"snapshot":          history.Snapshot,
+		"time_taken":        history.TimeTaken,
+		"questions":         questions,
+		"essay_submissions": essaySubmissions, // New field
+		"created_at":        history.CreatedAt,
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "History retrieved", response)
