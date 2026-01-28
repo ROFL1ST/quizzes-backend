@@ -33,6 +33,7 @@ func SetupRoutes(app *fiber.App) {
 
 	api.Get("/topics", controllers.GetAllTopics)
 	api.Get("/auth/me", middleware.Protected(), controllers.AuthMe)
+	api.Get("/admin/me", middleware.Protected(), controllers.AuthMe) // New: Dedicated Admin Profile
 	// Admin Routes
 	adminGroup := api.Group("/admin", middleware.Protected())
 
@@ -40,6 +41,7 @@ func SetupRoutes(app *fiber.App) {
 	adminGroup.Post("/create-admin", middleware.AllowRoles("supervisor"), controllers.CreateAdmin)
 
 	adminGroup.Get("/analytics", middleware.AllowRoles("supervisor", "admin"), controllers.GetDashboardAnalytics)
+	adminGroup.Get("/health", middleware.AllowRoles("supervisor", "admin"), controllers.GetSystemHealth) // New Health Check
 
 	// config
 	configGroup := adminGroup.Group("/config", middleware.AllowRoles("supervisor"))
@@ -55,6 +57,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// quiz admin routes
 	adminGroup.Get("/users", controllers.GetAllUsers)
+	adminGroup.Get("/admins", controllers.GetAllAdmins)
 	quizzesAdmin := adminGroup.Group("/quizzes", middleware.AllowRoles("supervisor", "admin", "pengajar"))
 	quizzesAdmin.Get("/", controllers.GetAllQuizzesAdmin)
 	quizzesAdmin.Post("/", controllers.CreateQuiz)
@@ -83,6 +86,9 @@ func SetupRoutes(app *fiber.App) {
 	questionGroup.Post("/bulk", controllers.BulkUploadQuestions)
 	questionGroup.Put("/:id", controllers.UpdateQuestionAdmin)
 	questionGroup.Delete("/:id", middleware.AllowRoles("supervisor", "admin"), controllers.DeleteQuestionAdmin)
+	// Dev/Test Route
+	questionGroup.Post("/randomize-difficulty", controllers.RandomizeDifficulty)
+	questionGroup.Post("/recalculate-difficulty", controllers.RecalculateDifficulty)
 
 	// shop routes admin
 	shopAdmin := adminGroup.Group("/shop", middleware.AllowRoles("supervisor", "admin"))
@@ -126,8 +132,10 @@ func SetupRoutes(app *fiber.App) {
 	adminGroup.Get("/translations", middleware.AllowRoles("supervisor", "admin"), controllers.GetAdminTranslations)
 	adminGroup.Post("/translations/sync", middleware.AllowRoles("supervisor", "admin"), controllers.SyncTranslations)
 
-	// Logout
+	// Logout (User)
 	api.Post("/logout", controllers.Logout)
+	// Logout (Admin)
+	api.Post("/admin/logout", controllers.LogoutAdmin)
 
 	// Broadcast Route
 	adminGroup.Post("/broadcast", middleware.AllowRoles("supervisor", "admin"), controllers.Broadcast)
@@ -147,6 +155,7 @@ func SetupRoutes(app *fiber.App) {
 	// User Routes
 	api.Get("/topics/:slug/quizzes", middleware.Protected(), controllers.GetQuizzesByTopicSlug)
 	api.Get("/quizzes/:id/questions", middleware.Protected(), controllers.GetQuestionsByQuizID)
+	api.Post("/quiz/adaptive/next", middleware.Protected(), controllers.GetNextAdaptiveQuestion)
 
 	history := api.Group("/history", middleware.Protected())
 	history.Post("/", controllers.SaveHistory)
@@ -171,12 +180,16 @@ func SetupRoutes(app *fiber.App) {
 	// Challenge Routes
 	challenges := api.Group("/challenges", middleware.Protected())
 	challenges.Post("/", controllers.CreateChallenge)
+	challenges.Post("/join", controllers.JoinChallengeByCode) // New
 	challenges.Get("/", controllers.GetMyChallenges)
 	challenges.Post("/:id/accept", controllers.AcceptChallenge)
 	challenges.Post("/:id/refuse", controllers.RejectChallenge)
+	challenges.Put("/:id/settings", controllers.UpdateLobbySettings) // New
 	challenges.Get("/:id/lobby-stream", controllers.StreamChallengeLobby)
 	challenges.Post("/:id/start", controllers.StartGameRealtime)
 	challenges.Post("/:id/progress", controllers.UpdateChallengeProgress)
+	challenges.Post("/:id/invite", controllers.InviteToLobby)  // NEW
+	challenges.Post("/:id/code", controllers.GenerateRoomCode) // NEW
 	challenges.Post("/:id/leave", controllers.LeaveLobby)
 
 	// Activity Feed
@@ -192,6 +205,7 @@ func SetupRoutes(app *fiber.App) {
 	userGroup.Post("/share", controllers.ShareProfileTrigger)
 	userGroup.Get("/analytics/smart", controllers.GetUserSmartAnalytics)
 	userGroup.Get("/activity/calendar", controllers.GetActivityCalendar)
+	userGroup.Get("/adaptivity", controllers.GetAdaptivity)
 
 	// Shop Routes
 	shopGroup := api.Group("/shop", middleware.Protected())

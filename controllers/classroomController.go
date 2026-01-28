@@ -192,7 +192,16 @@ func GetAssignmentSubmissions(c *fiber.Ctx) error {
 // GetAllClassrooms (Admin only)
 func GetAllClassrooms(c *fiber.Ctx) error {
 	var classrooms []models.Classroom
-	if err := config.DB.Preload("Teacher").Preload("Admin").Preload("Members").Find(&classrooms).Error; err != nil {
+	role := c.Locals("role").(string)
+	userID := c.Locals("user_id").(float64)
+
+	query := config.DB.Preload("Teacher").Preload("Admin").Preload("Members")
+
+	if role == "pengajar" {
+		query = query.Where("teacher_id = ? OR admin_id = ?", userID, userID)
+	}
+
+	if err := query.Find(&classrooms).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch classrooms", err.Error())
 	}
 	return utils.SuccessResponse(c, fiber.StatusOK, "All classrooms retrieved", classrooms)
@@ -276,8 +285,8 @@ func AssignClassroomTeacher(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
 	}
 
-	var user models.User
-	if err := config.DB.Where("username = ?", input.Username).First(&user).Error; err != nil {
+	var admin models.Admin
+	if err := config.DB.Where("username = ?", input.Username).First(&admin).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Teacher username not found", nil)
 	}
 
@@ -286,7 +295,7 @@ func AssignClassroomTeacher(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
 	}
 
-	classroom.TeacherID = &user.ID
+	classroom.TeacherID = &admin.ID
 	if err := config.DB.Save(&classroom).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to assign teacher", err.Error())
 	}

@@ -23,7 +23,21 @@ func Protected() fiber.Handler {
 		}
 
 		if tokenString == "" {
-			tokenString = c.Cookies("jwt")
+			// Path-based Cookie Strategy to avoid local conflicts
+			path := c.Path()
+			if strings.Contains(path, "/admin") {
+				// Priority: Admin
+				tokenString = c.Cookies("admin_jwt")
+				if tokenString == "" {
+					tokenString = c.Cookies("user_jwt")
+				}
+			} else {
+				// Priority: User
+				tokenString = c.Cookies("user_jwt")
+				if tokenString == "" {
+					tokenString = c.Cookies("admin_jwt")
+				}
+			}
 		}
 
 		// if tokenString == "" {

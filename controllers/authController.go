@@ -109,7 +109,7 @@ func LoginUser(c *fiber.Ctx) error {
 
 	// Set Cookie
 	c.Cookie(&fiber.Cookie{
-		Name:     "jwt",
+		Name:     "user_jwt",
 		Value:    t,
 		Expires:  time.Now().Add(24 * time.Hour),
 		HTTPOnly: true,
@@ -184,7 +184,7 @@ func LoginAdmin(c *fiber.Ctx) error {
 
 	// Set Cookie
 	c.Cookie(&fiber.Cookie{
-		Name:     "jwt",
+		Name:     "admin_jwt",
 		Value:    t,
 		Expires:  time.Now().Add(24 * time.Hour),
 		HTTPOnly: true,
@@ -224,7 +224,7 @@ func AuthMe(c *fiber.Ctx) error {
 
 		// Set Cookie
 		c.Cookie(&fiber.Cookie{
-			Name:     "jwt",
+			Name:     "user_jwt",
 			Value:    t,
 			Expires:  time.Now().Add(24 * time.Hour),
 			HTTPOnly: true,
@@ -293,7 +293,7 @@ func AuthMe(c *fiber.Ctx) error {
 
 		// Set Cookie
 		c.Cookie(&fiber.Cookie{
-			Name:     "jwt",
+			Name:     "admin_jwt",
 			Value:    t,
 			Expires:  time.Now().Add(24 * time.Hour),
 			HTTPOnly: true,
@@ -435,13 +435,25 @@ func CreateAdmin(c *fiber.Ctx) error {
 }
 
 func Logout(c *fiber.Ctx) error {
+	// Logout User
 	c.Cookie(&fiber.Cookie{
-		Name:     "jwt",
+		Name:     "user_jwt",
 		Value:    "",
-		Expires:  time.Now().Add(-time.Hour), // Expire immediately
+		Expires:  time.Now().Add(-time.Hour),
 		HTTPOnly: true,
-		Secure:   false,
 		SameSite: "Lax",
 	})
-	return utils.SuccessResponse(c, fiber.StatusOK, "Logged out successfully", nil)
+	return utils.SuccessResponse(c, fiber.StatusOK, "User logged out successfully", nil)
+}
+
+func LogoutAdmin(c *fiber.Ctx) error {
+	// Logout Admin
+	c.Cookie(&fiber.Cookie{
+		Name:     "admin_jwt",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		HTTPOnly: true,
+		SameSite: "Lax",
+	})
+	return utils.SuccessResponse(c, fiber.StatusOK, "Admin logged out successfully", nil)
 }

@@ -27,19 +27,18 @@ type TopicPerformance struct {
 }
 
 func SearchUsers(c *fiber.Ctx) error {
-	
+
 	query := c.Query("q")
 	if query == "" {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Query parameter 'q' is required", nil)
 	}
 
 	var users []models.User
-	
+
 	if err := config.DB.Where("username ILIKE ? OR name ILIKE ?", "%"+query+"%", "%"+query+"%").Limit(10).Find(&users).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to search users", nil)
 	}
 
-	
 	type SearchResponse struct {
 		models.User
 		EquippedItems []models.Item `json:"equipped_items"`
@@ -50,7 +49,7 @@ func SearchUsers(c *fiber.Ctx) error {
 	// 3. Fix: Loop setiap user untuk ambil item masing-masing
 	for _, u := range users {
 		var items []models.Item
-		
+
 		config.DB.Table("items").
 			Joins("JOIN user_items ON user_items.item_id = items.id").
 			Where("user_items.user_id = ? AND user_items.is_equipped = ?", u.ID, true).
@@ -353,7 +352,6 @@ func GetMyAchievements(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusOK, "Achievements retrieved", response)
 }
 
-
 func ShareProfileTrigger(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 
@@ -361,7 +359,6 @@ func ShareProfileTrigger(c *fiber.Ctx) error {
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Share event recorded", nil)
 }
-
 
 type TopicAnalysis struct {
 	TopicName   string  `json:"topic_name"`
@@ -373,7 +370,6 @@ func GetUserSmartAnalytics(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 	var stats []TopicAnalysis
 
-	
 	err := config.DB.Table("histories").
 		Select("topics.name as topic_name, COUNT(histories.id) as played_count, AVG(histories.score) as avg_score").
 		Joins("JOIN quizzes ON quizzes.id = histories.quiz_id").
@@ -394,7 +390,6 @@ func GetActivityCalendar(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64)
 	var dates []string
 
-	
 	err := config.DB.Model(&models.StreakLog{}).
 		Select("TO_CHAR(date, 'YYYY-MM-DD')").
 		Where("user_id = ?", userID).
@@ -406,4 +401,19 @@ func GetActivityCalendar(c *fiber.Ctx) error {
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Kalender Aktivitas", dates)
+}
+
+func GetAdaptivity(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(float64)
+
+	var adaptivity models.UserAdaptivity
+	if err := config.DB.First(&adaptivity, userID).Error; err != nil {
+		// Jika belum ada, return default
+		return utils.SuccessResponse(c, fiber.StatusOK, "Default Adaptivity", fiber.Map{
+			"adaptive_rating": 0.5,
+			"confidence":      0.0,
+		})
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "User Adaptivity", adaptivity)
 }

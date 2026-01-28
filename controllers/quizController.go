@@ -1,11 +1,12 @@
 package controllers
 
 import (
+	"encoding/json"
+	"strconv"
+
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
-	"encoding/json"
-	"strconv"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -15,10 +16,27 @@ func CreateQuiz(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
 	}
 
-	var count int64
-	config.DB.Model(&models.Topic{}).Where("id = ?", quiz.TopicID).Count(&count)
-	if count == 0 {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "Topic not found", nil)
+	// Validation: Must have either TopicID or ClassroomID
+	if quiz.TopicID == nil && quiz.ClassroomID == nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Quiz must belong to either a Topic or a Classroom", nil)
+	}
+
+	// If TopicID is present, validate it
+	if quiz.TopicID != nil {
+		var count int64
+		config.DB.Model(&models.Topic{}).Where("id = ?", quiz.TopicID).Count(&count)
+		if count == 0 {
+			return utils.ErrorResponse(c, fiber.StatusNotFound, "Topic not found", nil)
+		}
+	}
+
+	// If ClassroomID is present, can validate too (Optional but good practice)
+	if quiz.ClassroomID != nil {
+		var count int64
+		config.DB.Model(&models.Classroom{}).Where("id = ?", quiz.ClassroomID).Count(&count)
+		if count == 0 {
+			return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
+		}
 	}
 
 	if err := config.DB.Create(&quiz).Error; err != nil {
@@ -88,51 +106,54 @@ func GetMyCommunityQuizzes(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusOK, "Daftar Kuis Buatanmu", quizzes)
 }
 
-
 func GetRemedialQuestions(c *fiber.Ctx) error {
-    userID := c.Locals("user_id").(float64)
+	userID := c.Locals("user_id").(float64)
 
-    // 1. Ambil 10 history terakhir user
-    var histories []models.History
-    config.DB.Where("user_id = ?", userID).Order("created_at desc").Limit(10).Find(&histories)
+	// 1. Ambil 10 history terakhir user
+	var histories []models.History
+	config.DB.Where("user_id = ?", userID).Order("created_at desc").Limit(10).Find(&histories)
 
-    wrongQIDs := []uint{}
-    seenQIDs := make(map[uint]bool) // Untuk mencegah soal duplikat
+	wrongQIDs := []uint{}
+	seenQIDs := make(map[uint]bool) // Untuk mencegah soal duplikat
 
-    // 2. Loop history untuk cari jawaban salah
-    for _, h := range histories {
-        var userAnswers map[string]string
-        if err := json.Unmarshal(h.Snapshot, &userAnswers); err != nil {
-            continue
-        }
+	// 2. Loop history untuk cari jawaban salah
+	for _, h := range histories {
+		var userAnswers map[string]string
+		if err := json.Unmarshal(h.Snapshot, &userAnswers); err != nil {
+			continue
+		}
 
-        for qIDStr, userAns := range userAnswers {
-            qIDInt, _ := strconv.Atoi(qIDStr)
-            qID := uint(qIDInt)
+		for qIDStr, userAns := range userAnswers {
+			qIDInt, _ := strconv.Atoi(qIDStr)
+			qID := uint(qIDInt)
 
-            if seenQIDs[qID] { continue } // Skip jika sudah masuk list
+			if seenQIDs[qID] {
+				continue
+			} // Skip jika sudah masuk list
 
-            // Cek ke Database (Optimasi: Bisa pakai map caching jika data besar)
-            var q models.Question
-            if err := config.DB.Select("id, correct_answer").First(&q, qID).Error; err == nil {
-                // Logic simpel: jika string jawaban beda, anggap salah
-                // (Untuk production, gunakan logic grading yang lebih detail seperti di SaveHistory)
-                if q.CorrectAnswer != userAns {
-                    wrongQIDs = append(wrongQIDs, q.ID)
-                    seenQIDs[qID] = true
-                }
-            }
-        }
-        if len(wrongQIDs) >= 10 { break } // Cukup 10 soal
-    }
+			// Cek ke Database (Optimasi: Bisa pakai map caching jika data besar)
+			var q models.Question
+			if err := config.DB.Select("id, correct_answer").First(&q, qID).Error; err == nil {
+				// Logic simpel: jika string jawaban beda, anggap salah
+				// (Untuk production, gunakan logic grading yang lebih detail seperti di SaveHistory)
+				if q.CorrectAnswer != userAns {
+					wrongQIDs = append(wrongQIDs, q.ID)
+					seenQIDs[qID] = true
+				}
+			}
+		}
+		if len(wrongQIDs) >= 10 {
+			break
+		} // Cukup 10 soal
+	}
 
-    if len(wrongQIDs) == 0 {
-        return utils.ErrorResponse(c, fiber.StatusNotFound, "Tidak ada soal remedial. Kamu hebat!", nil)
-    }
+	if len(wrongQIDs) == 0 {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Tidak ada soal remedial. Kamu hebat!", nil)
+	}
 
-    // 3. Ambil data soal lengkap
-    var questions []models.Question
-    config.DB.Preload("Quiz").Where("id IN ?", wrongQIDs).Find(&questions)
+	// 3. Ambil data soal lengkap
+	var questions []models.Question
+	config.DB.Preload("Quiz").Where("id IN ?", wrongQIDs).Find(&questions)
 
-    return utils.SuccessResponse(c, fiber.StatusOK, "Sesi Remedial Dimulai", questions)
+	return utils.SuccessResponse(c, fiber.StatusOK, "Sesi Remedial Dimulai", questions)
 }
