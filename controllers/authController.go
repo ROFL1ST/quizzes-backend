@@ -228,8 +228,8 @@ func AuthMe(c *fiber.Ctx) error {
 			Value:    t,
 			Expires:  time.Now().Add(24 * time.Hour),
 			HTTPOnly: true,
-			Secure:   false,
-			SameSite: "Lax",
+			Secure:   true,
+			SameSite: "None",
 		})
 
 		var equippedItems []models.Item
