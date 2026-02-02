@@ -24,15 +24,10 @@ RUN apk --no-cache add ca-certificates bash curl
 # 2. Setup Backend (Go)
 # Copy binary dari stage builder
 COPY --from=builder /app/server .
-# Copy .env
-COPY .env . 
-
-# 3. Setup Script Startup
-COPY start.sh .
-RUN chmod +x start.sh
+# COPY .env . # Tidak perlu copy .env untuk Cloud Run (gunakan Environment Variables)
 
 # Cloud Run Port
-EXPOSE 8000
+EXPOSE 8080
 
-# Jalankan script
-CMD ["./start.sh"]
+# Jalankan Service
+CMD ["./server"]
