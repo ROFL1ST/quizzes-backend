@@ -113,8 +113,8 @@ func LoginUser(c *fiber.Ctx) error {
 		Value:    t,
 		Expires:  time.Now().Add(24 * time.Hour),
 		HTTPOnly: true,
-		Secure:   false, // Set true in production
-		SameSite: "Lax",
+		Secure:   true, // Set true in production
+		SameSite: "None",
 	})
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{
@@ -188,8 +188,8 @@ func LoginAdmin(c *fiber.Ctx) error {
 		Value:    t,
 		Expires:  time.Now().Add(24 * time.Hour),
 		HTTPOnly: true,
-		Secure:   false, // Set true in production
-		SameSite: "Lax",
+		Secure:   true, // Set true in production
+		SameSite: "None",
 	})
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Login success", fiber.Map{"user": admin, "role": admin.Role.Name})
@@ -228,8 +228,8 @@ func AuthMe(c *fiber.Ctx) error {
 			Value:    t,
 			Expires:  time.Now().Add(24 * time.Hour),
 			HTTPOnly: true,
-			Secure:   false,
-			SameSite: "Lax",
+			Secure:   true,
+			SameSite: "None",
 		})
 
 		var equippedItems []models.Item
@@ -297,8 +297,8 @@ func AuthMe(c *fiber.Ctx) error {
 			Value:    t,
 			Expires:  time.Now().Add(24 * time.Hour),
 			HTTPOnly: true,
-			Secure:   false,
-			SameSite: "Lax",
+			Secure:   true,
+			SameSite: "None",
 		})
 
 		return utils.SuccessResponse(c, fiber.StatusOK, "Admin session refreshed", fiber.Map{
