@@ -9,10 +9,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// seedRegex validates seed: alphanumeric and hyphen only, max 64 chars
+// seedRegex validates seed: alphanumeric and hyphen, 1-64 chars.
+// Allows hyphens at any position since seeds are typically auto-generated
+// (e.g., "1738716265-123" from timestamp and challenge ID).
 var seedRegex = regexp.MustCompile(`^[a-zA-Z0-9-]{1,64}$`)
 
-// validateSeed checks if a seed parameter is safe to use
+// validateSeed checks if a seed parameter is safe to use in database queries
 func validateSeed(seed string) bool {
 	if seed == "" {
 		return true

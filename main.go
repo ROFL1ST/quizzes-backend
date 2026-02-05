@@ -29,6 +29,12 @@ func validateConfig() {
 	if len(jwtSecret) < 32 {
 		log.Fatal("❌ JWT_SECRET must be at least 32 characters for security")
 	}
+
+	// Validate CORS_ORIGINS
+	corsOrigins := os.Getenv("CORS_ORIGINS")
+	if corsOrigins == "" {
+		log.Println("⚠️ CORS_ORIGINS not set, defaulting to localhost origins")
+	}
 }
 
 func main() {
@@ -42,8 +48,14 @@ func main() {
 	// config.MigrateOldChallenges()
 	app := fiber.New()
 
+	// Get CORS origins from environment, with a sensible default for local development
+	corsOrigins := os.Getenv("CORS_ORIGINS")
+	if corsOrigins == "" {
+		corsOrigins = "http://localhost:3000,http://localhost:5173"
+	}
+
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     os.Getenv("CORS_ORIGINS"),
+		AllowOrigins:     corsOrigins,
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
 	}))

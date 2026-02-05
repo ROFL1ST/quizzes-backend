@@ -601,7 +601,7 @@ func LeaveLobby(c *fiber.Ctx) error {
 		if err := config.DB.First(&user, uint(userID)).Error; err == nil {
 			user.Coins += challenge.WagerAmount
 			config.DB.Save(&user)
-			utils.SendNotification(uint(userID), "info", "Wager Refunded", fmt.Sprintf("Your wager of %d coins has been refunded", challenge.WagerAmount), "/shop")
+			utils.SendNotification(uint(userID), "info", "Wager Refunded", fmt.Sprintf("Your wager of %d coins has been refunded", challenge.WagerAmount), "/challenges")
 		}
 	}
 

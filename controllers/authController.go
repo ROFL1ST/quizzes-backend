@@ -48,7 +48,7 @@ func RegisterUser(c *fiber.Ctx) error {
 	}
 
 	if len(input.Password) > 128 {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be less than 128 characters", nil)
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must not exceed 128 characters", nil)
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
@@ -105,7 +105,8 @@ func LoginUser(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to sign token", err.Error())
 	}
 
-	// Save user data (omitting UserItems to prevent relationship issues)
+	// Omit UserItems to prevent GORM from attempting to save/update the preloaded
+	// relationship collection, which could cause duplicate key errors or unintended updates
 	config.DB.Omit("UserItems").Save(&user)
 
 	currentHour := utils.GetJakartaTime().Hour()
