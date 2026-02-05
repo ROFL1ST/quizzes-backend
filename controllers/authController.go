@@ -27,17 +27,8 @@ func RegisterUser(c *fiber.Ctx) error {
 	}
 
 	// Input validation
-	if input.Username == "" {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username is required", nil)
-	}
-	if len(input.Username) < 3 {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username must be at least 3 characters", nil)
-	}
-	if input.Password == "" {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password is required", nil)
-	}
-	if len(input.Password) < 6 {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be at least 6 characters", nil)
+	if err := utils.ValidateCredentials(c, input.Username, input.Password); err != nil {
+		return err
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
@@ -118,17 +109,8 @@ func RegisterAdmin(c *fiber.Ctx) error {
 	}
 
 	// Input validation
-	if input.Username == "" {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username is required", nil)
-	}
-	if len(input.Username) < 3 {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username must be at least 3 characters", nil)
-	}
-	if input.Password == "" {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password is required", nil)
-	}
-	if len(input.Password) < 6 {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be at least 6 characters", nil)
+	if err := utils.ValidateCredentials(c, input.Username, input.Password); err != nil {
+		return err
 	}
 
 	var role models.Role
@@ -322,11 +304,8 @@ func ResetPassword(c *fiber.Ctx) error {
 	if input.Token == "" {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Token is required", nil)
 	}
-	if input.NewPassword == "" {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "New password is required", nil)
-	}
-	if len(input.NewPassword) < 6 {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be at least 6 characters", nil)
+	if err := utils.ValidatePassword(c, input.NewPassword); err != nil {
+		return err
 	}
 
 	// 1. Validasi Token
@@ -370,17 +349,8 @@ func CreateAdmin(c *fiber.Ctx) error {
 	}
 
 	// Input validation
-	if input.Username == "" {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username is required", nil)
-	}
-	if len(input.Username) < 3 {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username must be at least 3 characters", nil)
-	}
-	if input.Password == "" {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password is required", nil)
-	}
-	if len(input.Password) < 6 {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be at least 6 characters", nil)
+	if err := utils.ValidateCredentials(c, input.Username, input.Password); err != nil {
+		return err
 	}
 
 	// Calculate default role if not provided (e.g. 2 for Pengajar)
