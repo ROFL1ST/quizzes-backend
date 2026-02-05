@@ -1,13 +1,15 @@
 package main
 
 import (
-	"github.com/gofiber/fiber/v2/middleware/logger"
+	"log"
+	"os"
 
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/routes"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
 func main() {
@@ -35,5 +37,12 @@ func main() {
 
 	routes.SetupRoutes(app)
 
-	app.Listen(":8000")
-}	
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8000"
+	}
+
+	if err := app.Listen(":" + port); err != nil {
+		log.Fatalf("Failed to start server on port %s: %v", port, err)
+	}
+}
