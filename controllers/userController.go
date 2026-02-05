@@ -216,7 +216,11 @@ func UpdateProfile(c *fiber.Ctx) error {
 		user.IsEmailVerified = false
 
 		// 3. Generate Token menggunakan Utility baru
-		user.EmailVerificationToken = utils.GenerateToken()
+		token, err := utils.GenerateToken()
+		if err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to generate verification token", err.Error())
+		}
+		user.EmailVerificationToken = token
 
 		// 4. Kirim Email Verifikasi (Gunakan Goroutine agar tidak blocking)
 		go func(emailAddr, tokenStr string) {

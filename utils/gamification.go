@@ -153,8 +153,8 @@ func AssignDailyMissions(userID uint) {
 		return
 	}
 
-	// Acak (Shuffle)
-	rand.Seed(time.Now().UnixNano())
+	// Acak (Shuffle) - Using math/rand/v2 pattern (Go 1.20+)
+	// rand.Seed is deprecated since Go 1.20, global rand functions now auto-seed
 	rand.Shuffle(len(allMissions), func(i, j int) {
 		allMissions[i], allMissions[j] = allMissions[j], allMissions[i]
 	})
