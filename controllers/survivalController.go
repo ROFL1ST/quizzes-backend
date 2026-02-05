@@ -1,16 +1,34 @@
 package controllers
 
 import (
+	"regexp"
+
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
 	"github.com/gofiber/fiber/v2"
 )
 
+// seedRegex validates seed: alphanumeric and hyphen only, max 64 chars
+var seedRegex = regexp.MustCompile(`^[a-zA-Z0-9-]{1,64}$`)
+
+// validateSeed checks if a seed parameter is safe to use
+func validateSeed(seed string) bool {
+	if seed == "" {
+		return true
+	}
+	return seedRegex.MatchString(seed)
+}
+
 // StartSurvival starts a survival game session
 func StartSurvival(c *fiber.Ctx) error {
 	// Accept optional seed for deterministic random (multiplayer)
 	seed := c.Query("seed", "")
+
+	// Validate seed parameter
+	if !validateSeed(seed) {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid seed format", nil)
+	}
 
 	var question models.Question
 
@@ -46,6 +64,11 @@ func AnswerSurvival(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&input); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
+	}
+
+	// Validate seed parameter
+	if !validateSeed(input.Seed) {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid seed format", nil)
 	}
 
 	var question models.Question

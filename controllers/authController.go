@@ -3,7 +3,9 @@ package controllers
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ROFL1ST/quizzes-backend/config"
@@ -13,6 +15,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// usernameRegex validates usernames: alphanumeric, underscore, hyphen, 3-30 chars
+var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,30}$`)
 
 func RegisterUser(c *fiber.Ctx) error {
 	// Gunakan struct sementara, JANGAN models.User
@@ -24,6 +29,26 @@ func RegisterUser(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&input); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input data", err.Error())
+	}
+
+	// Input validation
+	input.Name = strings.TrimSpace(input.Name)
+	input.Username = strings.TrimSpace(input.Username)
+
+	if len(input.Name) == 0 || len(input.Name) > 100 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Name must be 1-100 characters", nil)
+	}
+
+	if !usernameRegex.MatchString(input.Username) {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username must be 3-30 characters and contain only letters, numbers, underscore, or hyphen", nil)
+	}
+
+	if len(input.Password) < 8 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be at least 8 characters", nil)
+	}
+
+	if len(input.Password) > 128 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be less than 128 characters", nil)
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
@@ -80,9 +105,8 @@ func LoginUser(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to sign token", err.Error())
 	}
 
+	// Save user data (omitting UserItems to prevent relationship issues)
 	config.DB.Omit("UserItems").Save(&user)
-
-	config.DB.Save(&user)
 
 	currentHour := utils.GetJakartaTime().Hour()
 	utils.CheckDailyMissions(user.ID, "login", 0, strconv.Itoa(currentHour))

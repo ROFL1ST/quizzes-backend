@@ -315,6 +315,16 @@ func RejectChallenge(c *fiber.Ctx) error {
 		if allOpponentsRejected {
 			challenge.Status = "rejected"
 			config.DB.Save(&challenge)
+
+			// REFUND: Return wager to creator when all opponents reject
+			if challenge.WagerAmount > 0 {
+				var creator models.User
+				if err := config.DB.First(&creator, challenge.CreatorID).Error; err == nil {
+					creator.Coins += challenge.WagerAmount
+					config.DB.Save(&creator)
+					utils.SendNotification(creator.ID, "info", "Wager Refunded", fmt.Sprintf("Your wager of %d coins has been refunded", challenge.WagerAmount), "/challenges")
+				}
+			}
 		}
 
 		if challenge.IsRealtime {
@@ -579,6 +589,22 @@ func LeaveLobby(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "You are not in this challenge", nil)
 	}
 
+	// 1.5. Get challenge data for wager refund check
+	var challenge models.Challenge
+	if err := config.DB.First(&challenge, challengeID).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Challenge not found", nil)
+	}
+
+	// REFUND: Return wager if participant had accepted and paid
+	if challenge.WagerAmount > 0 && participant.Status == "accepted" && challenge.Status == "pending" {
+		var user models.User
+		if err := config.DB.First(&user, uint(userID)).Error; err == nil {
+			user.Coins += challenge.WagerAmount
+			config.DB.Save(&user)
+			utils.SendNotification(uint(userID), "info", "Wager Refunded", fmt.Sprintf("Your wager of %d coins has been refunded", challenge.WagerAmount), "/shop")
+		}
+	}
+
 	// 2. Hapus dari lobby (Soft Delete)
 	// Ini memungkinkan user untuk join kembali jika mereka mau (karena record dianggap hilang)
 	if err := config.DB.Delete(&participant).Error; err != nil {
@@ -586,7 +612,6 @@ func LeaveLobby(c *fiber.Ctx) error {
 	}
 
 	// 3. HOST MIGRATION LOGIC
-	var challenge models.Challenge
 	if err := config.DB.Preload("Participants.User").First(&challenge, challengeID).Error; err == nil {
 
 		// Jika yang keluar adalah Host
@@ -618,6 +643,15 @@ func LeaveLobby(c *fiber.Ctx) error {
 				// Lobby kosong melompong -> Cancel Challenge
 				challenge.Status = "cancelled"
 				config.DB.Save(&challenge)
+
+				// REFUND: Return wager to creator when lobby is cancelled
+				if challenge.WagerAmount > 0 {
+					var creator models.User
+					if err := config.DB.First(&creator, challenge.CreatorID).Error; err == nil {
+						creator.Coins += challenge.WagerAmount
+						config.DB.Save(&creator)
+					}
+				}
 			}
 		}
 

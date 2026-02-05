@@ -11,9 +11,28 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/joho/godotenv"
 )
 
+// validateConfig ensures required environment variables are set
+func validateConfig() {
+	// Load .env only in local development
+	if os.Getenv("VERCEL_ENV") == "" {
+		_ = godotenv.Load()
+	}
+
+	// Validate JWT_SECRET
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("❌ JWT_SECRET environment variable is required")
+	}
+	if len(jwtSecret) < 32 {
+		log.Fatal("❌ JWT_SECRET must be at least 32 characters for security")
+	}
+}
+
 func main() {
+	validateConfig()
 	config.ConnectDB()
 	// config.SeedDatabase()
 	// config.SeedExamData()
@@ -24,7 +43,7 @@ func main() {
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "https://quizapp-indo.vercel.app, https://planetpulse-admin-gwcx.vercel.app, http://localhost:5173, http://localhost:3000",
+		AllowOrigins:     os.Getenv("CORS_ORIGINS"),
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
 	}))

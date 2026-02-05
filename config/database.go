@@ -87,7 +87,6 @@ func ConnectDB() {
 		&models.Assignment{},
 		&models.Announcement{},
 		&models.Translation{},
-		&models.Translation{},
 		&models.UserAdaptivity{},
 		&models.EssaySubmission{},
 	)
