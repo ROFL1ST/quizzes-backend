@@ -26,6 +26,20 @@ func RegisterUser(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input data", err.Error())
 	}
 
+	// Input validation
+	if input.Username == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username is required", nil)
+	}
+	if len(input.Username) < 3 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username must be at least 3 characters", nil)
+	}
+	if input.Password == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password is required", nil)
+	}
+	if len(input.Password) < 6 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be at least 6 characters", nil)
+	}
+
 	hashed, err := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to secure password", err.Error())
@@ -56,14 +70,14 @@ func LoginUser(c *fiber.Ctx) error {
 
 	var user models.User
 	if err := config.DB.Preload("UserItems", "is_equipped = ?", true).Preload("UserItems.Item").Where("username = ?", input.Username).First(&user).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 	if user.ID == 0 {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Incorrect password", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 	if user.IsBanned {
 		return utils.ErrorResponse(c, fiber.StatusForbidden, "Account is banned", nil)
@@ -103,6 +117,20 @@ func RegisterAdmin(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
 	}
 
+	// Input validation
+	if input.Username == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username is required", nil)
+	}
+	if len(input.Username) < 3 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username must be at least 3 characters", nil)
+	}
+	if input.Password == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password is required", nil)
+	}
+	if len(input.Password) < 6 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be at least 6 characters", nil)
+	}
+
 	var role models.Role
 	if err := config.DB.First(&role, input.RoleID).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid Role ID", nil)
@@ -133,11 +161,11 @@ func LoginAdmin(c *fiber.Ctx) error {
 
 	var admin models.Admin
 	if err := config.DB.Preload("Role").Where("username = ?", input.Username).First(&admin).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "Admin not found", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(input.Password)); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Incorrect password", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 
 	claims := jwt.MapClaims{
@@ -290,6 +318,17 @@ func ResetPassword(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", nil)
 	}
 
+	// Input validation
+	if input.Token == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Token is required", nil)
+	}
+	if input.NewPassword == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "New password is required", nil)
+	}
+	if len(input.NewPassword) < 6 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be at least 6 characters", nil)
+	}
+
 	// 1. Validasi Token
 	var resetData models.PasswordReset
 	if err := config.DB.Where("token = ? AND expired_at > ?", input.Token, time.Now()).First(&resetData).Error; err != nil {
@@ -328,6 +367,20 @@ func CreateAdmin(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&input); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
+	}
+
+	// Input validation
+	if input.Username == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username is required", nil)
+	}
+	if len(input.Username) < 3 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Username must be at least 3 characters", nil)
+	}
+	if input.Password == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password is required", nil)
+	}
+	if len(input.Password) < 6 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be at least 6 characters", nil)
 	}
 
 	// Calculate default role if not provided (e.g. 2 for Pengajar)
