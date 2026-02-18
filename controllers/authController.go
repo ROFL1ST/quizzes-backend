@@ -56,14 +56,14 @@ func LoginUser(c *fiber.Ctx) error {
 
 	var user models.User
 	if err := config.DB.Preload("UserItems", "is_equipped = ?", true).Preload("UserItems.Item").Where("username = ?", input.Username).First(&user).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 	if user.ID == 0 {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Incorrect password", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 	if user.IsBanned {
 		return utils.ErrorResponse(c, fiber.StatusForbidden, "Account is banned", nil)
@@ -164,11 +164,11 @@ func LoginAdmin(c *fiber.Ctx) error {
 
 	var admin models.Admin
 	if err := config.DB.Preload("Role").Where("username = ?", input.Username).First(&admin).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "Admin not found", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(input.Password)); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Incorrect password", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 
 	claims := jwt.MapClaims{
@@ -203,7 +203,7 @@ func AuthMe(c *fiber.Ctx) error {
 
 		var user models.User
 		if err := config.DB.Preload("UserItems", "is_equipped = ?", true).Preload("UserItems.Item").First(&user, userID).Error; err != nil {
-			return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+			return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 		}
 
 		if user.IsBanned {
@@ -272,7 +272,7 @@ func AuthMe(c *fiber.Ctx) error {
 		var admin models.Admin
 		// Preload Role untuk memastikan data role admin terbaru
 		if err := config.DB.Preload("Role").First(&admin, userID).Error; err != nil {
-			return utils.ErrorResponse(c, fiber.StatusNotFound, "Admin not found", nil)
+			return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 		}
 
 		if admin.Role.Name != role {
@@ -319,13 +319,12 @@ func ForgotPassword(c *fiber.Ctx) error {
 
 	var user models.User
 	if err := config.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
-		// Return 404 jika email tidak ditemukan
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "Email not found", nil)
+		return utils.SuccessResponse(c, fiber.StatusOK, "If the email is registered, a password reset link will be sent", nil)
 	}
 
 	// Cek apakah email sudah diverifikasi
 	if !user.IsEmailVerified {
-		return utils.ErrorResponse(c, fiber.StatusForbidden, "Email not verified. Please verify via settings first.", nil)
+		return utils.SuccessResponse(c, fiber.StatusOK, "If the email is registered, a password reset link will be sent", nil)
 	}
 
 	// 1. Generate Token menggunakan Utility
@@ -355,7 +354,7 @@ func ForgotPassword(c *fiber.Ctx) error {
 		}
 	}(input.Email, token)
 
-	return utils.SuccessResponse(c, fiber.StatusOK, "Password reset link sent to your email", nil)
+	return utils.SuccessResponse(c, fiber.StatusOK, "If the email is registered, a password reset link will be sent", nil)
 }
 
 // ResetPassword menangani perubahan password dengan token

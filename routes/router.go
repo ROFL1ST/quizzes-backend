@@ -13,10 +13,26 @@ import (
 func SetupRoutes(app *fiber.App) {
 	api := app.Group("/api")
 
-	api.Post("/register", controllers.RegisterUser)
-	api.Post("/login", controllers.LoginUser)
-	api.Post("/admin/register", controllers.RegisterAdmin)
-	api.Post("/admin/login", controllers.LoginAdmin)
+	// Rate limiter for auth endpoints
+	authLimiter := limiter.New(limiter.Config{
+		Max:        10,
+		Expiration: 1 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP() + ":" + c.Path()
+		},
+	})
+
+	passwordRecoveryLimiter := limiter.New(limiter.Config{
+		Max:        5,
+		Expiration: 10 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP() + ":" + c.Path()
+		},
+	})
+
+	api.Post("/register", authLimiter, controllers.RegisterUser)
+	api.Post("/login", authLimiter, controllers.LoginUser)
+	api.Post("/admin/login", authLimiter, controllers.LoginAdmin)
 
 	// Public Announcements
 	api.Get("/announcements", controllers.GetAnnouncements)
@@ -24,8 +40,8 @@ func SetupRoutes(app *fiber.App) {
 	// verify email
 	api.Post("/verify-email", controllers.VerifyEmail)
 	// forgot password
-	api.Post("/forgot-password", controllers.ForgotPassword)
-	api.Post("/reset-password", controllers.ResetPassword)
+	api.Post("/forgot-password", passwordRecoveryLimiter, controllers.ForgotPassword)
+	api.Post("/reset-password", passwordRecoveryLimiter, controllers.ResetPassword)
 
 	// AI Service
 	api.Post("/ai/translate", middleware.Protected(), controllers.TranslateText)
@@ -38,6 +54,7 @@ func SetupRoutes(app *fiber.App) {
 	adminGroup := api.Group("/admin", middleware.Protected())
 
 	// Superadmin only: Create Admin
+	adminGroup.Post("/register", middleware.AllowRoles("supervisor"), controllers.RegisterAdmin)
 	adminGroup.Post("/create-admin", middleware.AllowRoles("supervisor"), controllers.CreateAdmin)
 
 	adminGroup.Get("/analytics", middleware.AllowRoles("supervisor", "admin"), controllers.GetDashboardAnalytics)

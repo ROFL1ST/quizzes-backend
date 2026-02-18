@@ -3,12 +3,13 @@ package controllers
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"strconv"
+	"errors"
 
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
 	"github.com/ROFL1ST/quizzes-backend/utils"
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 func generateClassCode() string {
@@ -19,9 +20,22 @@ func generateClassCode() string {
 	return hex.EncodeToString(bytes)
 }
 
-func stringToUint(s string) uint {
-	val, _ := strconv.Atoi(s)
-	return uint(val)
+func canAccessClassroom(classroom models.Classroom, userID uint, role string) bool {
+	if role == "supervisor" || role == "admin" {
+		return true
+	}
+
+	if classroom.AdminID != nil && *classroom.AdminID == userID {
+		return true
+	}
+
+	if classroom.TeacherID != nil && *classroom.TeacherID == userID {
+		return true
+	}
+
+	var member models.ClassroomMember
+	err := config.DB.Where("classroom_id = ? AND student_id = ?", classroom.ID, userID).First(&member).Error
+	return err == nil
 }
 
 // CreateClassroom (Teacher only)
@@ -120,6 +134,8 @@ func GetMyClassrooms(c *fiber.Ctx) error {
 // CreateAssignment (Teacher only)
 func CreateAssignment(c *fiber.Ctx) error {
 	classroomID := c.Params("id")
+	userID := uint(c.Locals("user_id").(float64))
+	role, _ := c.Locals("role").(string)
 	var input struct {
 		QuizID   uint   `json:"quiz_id"`
 		Deadline string `json:"deadline"`
@@ -129,8 +145,17 @@ func CreateAssignment(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
 	}
 
+	var classroom models.Classroom
+	if err := config.DB.First(&classroom, classroomID).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
+	}
+
+	if !canAccessClassroom(classroom, userID, role) {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Not allowed to create assignment for this classroom", nil)
+	}
+
 	assignment := models.Assignment{
-		ClassroomID: stringToUint(classroomID),
+		ClassroomID: classroom.ID,
 		QuizID:      input.QuizID,
 		Deadline:    input.Deadline,
 	}
@@ -145,11 +170,16 @@ func CreateAssignment(c *fiber.Ctx) error {
 // GetClassroomDetails (Members only)
 func GetClassroomDetails(c *fiber.Ctx) error {
 	id := c.Params("id")
-	userID := c.Locals("user_id").(float64)
+	userID := uint(c.Locals("user_id").(float64))
+	role, _ := c.Locals("role").(string)
 
 	var classroom models.Classroom
 	if err := config.DB.Preload("Teacher").Preload("Members.Student").First(&classroom, id).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
+	}
+
+	if !canAccessClassroom(classroom, userID, role) {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "You are not a classroom member", nil)
 	}
 
 	var assignments []models.Assignment
@@ -209,6 +239,8 @@ func GetAllClassrooms(c *fiber.Ctx) error {
 
 // AddClassroomMember (Admin/Teacher manually adds a student)
 func AddClassroomMember(c *fiber.Ctx) error {
+	userID := uint(c.Locals("user_id").(float64))
+	role, _ := c.Locals("role").(string)
 	var input struct {
 		ClassroomID uint   `json:"classroom_id"`
 		StudentID   uint   `json:"student_id"`
@@ -237,6 +269,10 @@ func AddClassroomMember(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
 	}
 
+	if !canAccessClassroom(classroom, userID, role) {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Not allowed to manage this classroom", nil)
+	}
+
 	// Check if already a member
 	var member models.ClassroomMember
 	if err := config.DB.Where("classroom_id = ? AND student_id = ?", input.ClassroomID, input.StudentID).First(&member).Error; err == nil {
@@ -259,6 +295,17 @@ func AddClassroomMember(c *fiber.Ctx) error {
 func RemoveClassroomMember(c *fiber.Ctx) error {
 	classroomID := c.Params("id")
 	studentID := c.Params("studentId")
+	userID := uint(c.Locals("user_id").(float64))
+	role, _ := c.Locals("role").(string)
+
+	var classroom models.Classroom
+	if err := config.DB.First(&classroom, classroomID).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
+	}
+
+	if !canAccessClassroom(classroom, userID, role) {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Not allowed to manage this classroom", nil)
+	}
 
 	if err := config.DB.Where("classroom_id = ? AND student_id = ?", classroomID, studentID).Delete(&models.ClassroomMember{}).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to remove member", err.Error())
@@ -269,6 +316,26 @@ func RemoveClassroomMember(c *fiber.Ctx) error {
 // DeleteAssignment (Teacher/Admin)
 func DeleteAssignment(c *fiber.Ctx) error {
 	id := c.Params("id")
+	userID := uint(c.Locals("user_id").(float64))
+	role, _ := c.Locals("role").(string)
+
+	var assignment models.Assignment
+	if err := config.DB.First(&assignment, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return utils.ErrorResponse(c, fiber.StatusNotFound, "Assignment not found", nil)
+		}
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to find assignment", nil)
+	}
+
+	var classroom models.Classroom
+	if err := config.DB.First(&classroom, assignment.ClassroomID).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
+	}
+
+	if !canAccessClassroom(classroom, userID, role) {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Not allowed to manage this classroom", nil)
+	}
+
 	if err := config.DB.Delete(&models.Assignment{}, id).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to delete assignment", err.Error())
 	}
@@ -277,6 +344,8 @@ func DeleteAssignment(c *fiber.Ctx) error {
 
 func AssignClassroomTeacher(c *fiber.Ctx) error {
 	id := c.Params("id")
+	userID := uint(c.Locals("user_id").(float64))
+	role, _ := c.Locals("role").(string)
 	var input struct {
 		Username string `json:"username"`
 	}
@@ -293,6 +362,10 @@ func AssignClassroomTeacher(c *fiber.Ctx) error {
 	var classroom models.Classroom
 	if err := config.DB.First(&classroom, id).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
+	}
+
+	if !canAccessClassroom(classroom, userID, role) {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Not allowed to manage this classroom", nil)
 	}
 
 	classroom.TeacherID = &admin.ID

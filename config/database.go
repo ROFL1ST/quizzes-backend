@@ -34,13 +34,19 @@ func ConnectDB() {
 			log.Fatal("❌ DATABASE_URL kosong, dan DB_HOST kosong! Environment variable tidak terbaca!")
 		}
 
+		sslMode := os.Getenv("DB_SSLMODE")
+		if sslMode == "" {
+			sslMode = "require"
+		}
+
 		dsn = fmt.Sprintf(
-			"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Jakarta",
+			"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta",
 			host,
 			os.Getenv("DB_USER"),
 			os.Getenv("DB_PASSWORD"),
 			os.Getenv("DB_NAME"),
 			os.Getenv("DB_PORT"),
+			sslMode,
 		)
 
 		fmt.Println("🔍 Using separated DB_* variables")

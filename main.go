@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 
 	"github.com/ROFL1ST/quizzes-backend/config"
+	"github.com/ROFL1ST/quizzes-backend/middleware"
 	"github.com/ROFL1ST/quizzes-backend/routes"
 
 	"github.com/gofiber/fiber/v2"
@@ -14,6 +15,10 @@ import (
 )
 
 func main() {
+	if err := config.ValidateCriticalConfig(); err != nil {
+		log.Fatal(err)
+	}
+
 	config.ConnectDB()
 	// config.SeedDatabase()
 	// config.SeedExamData()
@@ -23,11 +28,8 @@ func main() {
 	// config.MigrateOldChallenges()
 	app := fiber.New()
 
-	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "https://quizapp-indo.vercel.app, https://planetpulse-admin-gwcx.vercel.app, http://localhost:5173, http://localhost:3000",
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
-		AllowCredentials: true,
-	}))
+	app.Use(cors.New(config.BuildCORSConfig()))
+	app.Use(middleware.EnforceOriginForStateChanging())
 
 	app.Use(logger.New(logger.Config{
 		// Format log custom (optional), defaultnya juga sudah bagus
