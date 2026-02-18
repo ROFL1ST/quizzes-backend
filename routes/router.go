@@ -15,7 +15,8 @@ func SetupRoutes(app *fiber.App) {
 
 	api.Post("/register", controllers.RegisterUser)
 	api.Post("/login", controllers.LoginUser)
-	api.Post("/admin/register", controllers.RegisterAdmin)
+	// api.Post("/admin/register", controllers.RegisterAdmin) // DELETED: Public admin registration is dangerous
+
 	api.Post("/admin/login", controllers.LoginAdmin)
 
 	// Public Announcements

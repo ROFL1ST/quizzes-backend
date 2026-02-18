@@ -21,10 +21,30 @@ func CreateQuestion(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
 	}
 
-	var count int64
-	config.DB.Model(&models.Quiz{}).Where("id = ?", q.QuizID).Count(&count)
-	if count == 0 {
+	var quiz models.Quiz
+	if err := config.DB.First(&quiz, q.QuizID).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Quiz not found", nil)
+	}
+
+	userID := uint(c.Locals("user_id").(float64))
+	userRole := c.Locals("role").(string)
+
+	// Authorization Check
+	if quiz.ClassroomID != nil {
+		// If it's a classroom quiz, only the Teacher of that classroom can add questions
+		var classroom models.Classroom
+		if err := config.DB.Select("teacher_id").First(&classroom, *quiz.ClassroomID).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to verify classroom ownership", nil)
+		}
+		if classroom.TeacherID == nil || *classroom.TeacherID != userID {
+			return utils.ErrorResponse(c, fiber.StatusForbidden, "Only the teacher can add questions to this quiz", nil)
+		}
+	} else {
+		// If it's a global/topic quiz, only Admins/Supervisors can add questions
+		// Assuming "student" cannot add global questions
+		if userRole != "admin" && userRole != "supervisor" && userRole != "superadmin" {
+			return utils.ErrorResponse(c, fiber.StatusForbidden, "Unauthorized to add questions to global quizzes", nil)
+		}
 	}
 
 	if err := config.DB.Create(&q).Error; err != nil {

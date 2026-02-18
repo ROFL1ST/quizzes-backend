@@ -30,12 +30,17 @@ func CreateQuiz(c *fiber.Ctx) error {
 		}
 	}
 
-	// If ClassroomID is present, can validate too (Optional but good practice)
+	// Validate ClassroomID if present
 	if quiz.ClassroomID != nil {
-		var count int64
-		config.DB.Model(&models.Classroom{}).Where("id = ?", quiz.ClassroomID).Count(&count)
-		if count == 0 {
+		var classroom models.Classroom
+		if err := config.DB.First(&classroom, quiz.ClassroomID).Error; err != nil {
 			return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
+		}
+
+		// Authorization: Only the Teacher can add quizzes to this classroom
+		userID := uint(c.Locals("user_id").(float64))
+		if classroom.TeacherID == nil || *classroom.TeacherID != userID {
+			return utils.ErrorResponse(c, fiber.StatusForbidden, "Only the teacher can add quizzes to this classroom", nil)
 		}
 	}
 
