@@ -18,6 +18,9 @@ func XApiKeyMiddleware() fiber.Handler {
 		}
 
 		apiKey := c.Get("X-API-KEY")
+		if apiKey == "" {
+			apiKey = c.Query("api_key")
+		}
 		serverKey := os.Getenv("API_KEY")
 
 		if serverKey == "" {
