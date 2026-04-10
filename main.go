@@ -45,7 +45,7 @@ func main() {
 	}
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins,
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-CSRF-Token, X-API-KEY", // Added X-API-KEY
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-CSRF-Token, X-API-KEY",
 		AllowCredentials: true,
 	}))
 
