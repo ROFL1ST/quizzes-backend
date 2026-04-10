@@ -6,19 +6,20 @@ import (
 	"os"
 
 	"github.com/ROFL1ST/quizzes-backend/models"
-	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 var DB *gorm.DB
 
-func ConnectDB() {
-	// Load .env hanya saat lokal (di Vercel file .env tidak ada)
-	if os.Getenv("VERCEL_ENV") == "" {
-		_ = godotenv.Load()
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
 	}
+	return fallback
+}
 
+func ConnectDB() {
 	var dsn string
 
 	// === PRIORITAS 1 : DATABASE_URL ===
@@ -35,12 +36,13 @@ func ConnectDB() {
 		}
 
 		dsn = fmt.Sprintf(
-			"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Jakarta",
+			"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta",
 			host,
 			os.Getenv("DB_USER"),
 			os.Getenv("DB_PASSWORD"),
 			os.Getenv("DB_NAME"),
 			os.Getenv("DB_PORT"),
+			getEnv("DB_SSLMODE", "disable"),
 		)
 
 		fmt.Println("🔍 Using separated DB_* variables")

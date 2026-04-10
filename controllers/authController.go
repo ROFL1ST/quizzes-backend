@@ -55,15 +55,13 @@ func LoginUser(c *fiber.Ctx) error {
 	}
 
 	var user models.User
-	if err := config.DB.Preload("UserItems", "is_equipped = ?", true).Preload("UserItems.Item").Where("username = ?", input.Username).First(&user).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
-	}
-	if user.ID == 0 {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+	// Unified error message to prevent enumeration
+	if err := config.DB.Preload("UserItems", "is_equipped = ?", true).Preload("UserItems.Item").Where("username = ?", input.Username).First(&user).Error; err != nil || user.ID == 0 {
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Incorrect password", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 	if user.IsBanned {
 		return utils.ErrorResponse(c, fiber.StatusForbidden, "Account is banned", nil)
@@ -164,11 +162,11 @@ func LoginAdmin(c *fiber.Ctx) error {
 
 	var admin models.Admin
 	if err := config.DB.Preload("Role").Where("username = ?", input.Username).First(&admin).Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "Admin not found", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(input.Password)); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Incorrect password", nil)
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid credentials", nil)
 	}
 
 	claims := jwt.MapClaims{
@@ -318,9 +316,14 @@ func ForgotPassword(c *fiber.Ctx) error {
 	}
 
 	var user models.User
-	if err := config.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
-		// Return 404 jika email tidak ditemukan
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "Email not found", nil)
+	// Don't reveal if email exists or not directly
+	err := config.DB.Where("email = ?", input.Email).First(&user).Error
+
+	if err != nil {
+		// Fake success response to prevent enumeration
+		// But in a real scenario we might want to log this internally
+		// Return 200 OK
+		return utils.SuccessResponse(c, fiber.StatusOK, "If your email is registered, you will receive a reset link", nil)
 	}
 
 	// Cek apakah email sudah diverifikasi
@@ -355,7 +358,7 @@ func ForgotPassword(c *fiber.Ctx) error {
 		}
 	}(input.Email, token)
 
-	return utils.SuccessResponse(c, fiber.StatusOK, "Password reset link sent to your email", nil)
+	return utils.SuccessResponse(c, fiber.StatusOK, "If your email is registered, you will receive a reset link", nil)
 }
 
 // ResetPassword menangani perubahan password dengan token

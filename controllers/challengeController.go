@@ -542,6 +542,12 @@ func UpdateChallengeProgress(c *fiber.Ctx) error {
 
 	userID := c.Locals("user_id").(float64)
 
+	// Verify Participation
+	var part models.ChallengeParticipant
+	if err := config.DB.Where("challenge_id = ? AND user_id = ?", challengeID, userID).First(&part).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "You are not a participant in this challenge", nil)
+	}
+
 	var user = &models.User{}
 	if err := config.DB.First(&user, uint(userID)).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)

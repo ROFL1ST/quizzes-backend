@@ -40,9 +40,9 @@ func Protected() fiber.Handler {
 			}
 		}
 
-		// if tokenString == "" {
-		// 	tokenString = c.Query("token")
-		// }
+		if tokenString == "" {
+			tokenString = c.Query("token")
+		}
 
 		if tokenString == "" {
 			return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
