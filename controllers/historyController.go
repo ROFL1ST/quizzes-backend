@@ -71,6 +71,7 @@ func SaveHistory(c *fiber.Ctx) error {
 	}
 
 	correctCount := 0
+	totalPointsEarned := 0.0
 	totalQuestions := len(questions)
 
 	// Hitung Benar/Salah
@@ -101,6 +102,8 @@ func SaveHistory(c *fiber.Ctx) error {
 				if score >= 70.0 {
 					isCorrect = true
 				}
+
+				totalPointsEarned += score
 
 				// Queue for saving later
 				essaySubmissions = append(essaySubmissions, models.EssaySubmission{
@@ -159,6 +162,10 @@ func SaveHistory(c *fiber.Ctx) error {
 			if isCorrect {
 				correctCount++
 			}
+
+			if q.Type != "essay" && isCorrect {
+				totalPointsEarned += 100.0
+			}
 		}
 	}
 
@@ -170,7 +177,7 @@ func SaveHistory(c *fiber.Ctx) error {
 		totalQuestions = input.TotalSoal
 	} else {
 		if totalQuestions > 0 {
-			finalScore = int(math.Round(float64(correctCount) / float64(totalQuestions) * 100))
+			finalScore = int(math.Round(totalPointsEarned / float64(totalQuestions)))
 		}
 	}
 

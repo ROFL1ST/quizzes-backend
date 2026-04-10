@@ -141,9 +141,13 @@ func CreateAssignment(c *fiber.Ctx) error {
 		Deadline:    input.Deadline,
 	}
 
-	// Authorization: Only the Teacher can create assignments
-	if classroom.TeacherID == nil || *classroom.TeacherID != uint(c.Locals("user_id").(float64)) {
-		return utils.ErrorResponse(c, fiber.StatusForbidden, "Only the teacher can create assignments", nil)
+	role := ""
+	if r := c.Locals("role"); r != nil {
+		role = r.(string)
+	}
+	isTeacher := classroom.TeacherID != nil && *classroom.TeacherID == uint(c.Locals("user_id").(float64))
+	if !isTeacher && role != "supervisor" {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Only the teacher or supervisor can create assignments", nil)
 	}
 
 	if err := config.DB.Create(&assignment).Error; err != nil {
@@ -173,8 +177,14 @@ func GetClassroomDetails(c *fiber.Ctx) error {
 		}
 	}
 
-	if !isTeacher && !isMember {
-		return utils.ErrorResponse(c, fiber.StatusForbidden, "You are not a member of this classroom", nil)
+	role := ""
+	if r := c.Locals("role"); r != nil {
+		role = r.(string)
+	}
+	isSupervisorOrAdmin := role == "supervisor" || role == "admin" || role == "superadmin"
+
+	if !isTeacher && !isMember && !isSupervisorOrAdmin {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "You are not a member of this classroom or an authorized admin", nil)
 	}
 
 	var assignments []models.Assignment
@@ -262,11 +272,14 @@ func AddClassroomMember(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
 	}
 
-	// Authorization: Only the Teacher can add members
-	if classroom.TeacherID == nil || *classroom.TeacherID != uint(c.Locals("user_id").(float64)) {
-		// Also allow Admin/Supervisor? Assuming handled by middleware for now, but explicit check is safer.
-		// For now, restrict to Teacher.
-		return utils.ErrorResponse(c, fiber.StatusForbidden, "Only the teacher can add members", nil)
+	role := ""
+	if r := c.Locals("role"); r != nil {
+		role = r.(string)
+	}
+	isTeacher := classroom.TeacherID != nil && *classroom.TeacherID == uint(c.Locals("user_id").(float64))
+
+	if !isTeacher && role != "supervisor" {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Only the teacher or supervisor can add members", nil)
 	}
 
 	// Check if already a member
@@ -298,12 +311,15 @@ func RemoveClassroomMember(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
 	}
 
-	// Authorization: Only Teacher can remove members
+	role := ""
+	if r := c.Locals("role"); r != nil {
+		role = r.(string)
+	}
 	currentUserID := uint(c.Locals("user_id").(float64))
-	if classroom.TeacherID == nil || *classroom.TeacherID != currentUserID {
-		// Optional: Allow student to remove themselves (leave class)?
-		// For now, strict teacher-only removal
-		return utils.ErrorResponse(c, fiber.StatusForbidden, "Only the teacher can remove members", nil)
+	isTeacher := classroom.TeacherID != nil && *classroom.TeacherID == currentUserID
+
+	if !isTeacher && role != "supervisor" {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Only the teacher or supervisor can remove members", nil)
 	}
 
 	if err := config.DB.Where("classroom_id = ? AND student_id = ?", classroomID, studentID).Delete(&models.ClassroomMember{}).Error; err != nil {
@@ -315,6 +331,20 @@ func RemoveClassroomMember(c *fiber.Ctx) error {
 // DeleteAssignment (Teacher/Admin)
 func DeleteAssignment(c *fiber.Ctx) error {
 	id := c.Params("id")
+	role := ""
+	if r := c.Locals("role"); r != nil {
+		role = r.(string)
+	}
+	if role != "supervisor" {
+		var assignment models.Assignment
+		if err := config.DB.Preload("Classroom").First(&assignment, id).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusNotFound, "Assignment not found", nil)
+		}
+		isTeacher := assignment.Classroom.TeacherID != nil && *assignment.Classroom.TeacherID == uint(c.Locals("user_id").(float64))
+		if !isTeacher {
+			return utils.ErrorResponse(c, fiber.StatusForbidden, "Only the teacher or supervisor can delete assignments", nil)
+		}
+	}
 	if err := config.DB.Delete(&models.Assignment{}, id).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to delete assignment", err.Error())
 	}
@@ -341,6 +371,17 @@ func AssignClassroomTeacher(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
 	}
 
+	role := ""
+	if r := c.Locals("role"); r != nil {
+		role = r.(string)
+	}
+	if role != "supervisor" {
+		isTeacher := classroom.TeacherID != nil && *classroom.TeacherID == uint(c.Locals("user_id").(float64))
+		if !isTeacher {
+			return utils.ErrorResponse(c, fiber.StatusForbidden, "Only the supervisor or existing teacher can assign a teacher", nil)
+		}
+	}
+
 	classroom.TeacherID = &admin.ID
 	if err := config.DB.Save(&classroom).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to assign teacher", err.Error())
@@ -351,6 +392,20 @@ func AssignClassroomTeacher(c *fiber.Ctx) error {
 
 func DeleteClassroom(c *fiber.Ctx) error {
 	id := c.Params("id")
+	role := ""
+	if r := c.Locals("role"); r != nil {
+		role = r.(string)
+	}
+	if role != "supervisor" {
+		var classroom models.Classroom
+		if err := config.DB.First(&classroom, id).Error; err != nil {
+			return utils.ErrorResponse(c, fiber.StatusNotFound, "Classroom not found", nil)
+		}
+		isTeacher := classroom.TeacherID != nil && *classroom.TeacherID == uint(c.Locals("user_id").(float64))
+		if !isTeacher {
+			return utils.ErrorResponse(c, fiber.StatusForbidden, "Only the teacher or supervisor can delete classrooms", nil)
+		}
+	}
 	if err := config.DB.Delete(&models.Classroom{}, id).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed delete classroom", err.Error())
 	}
