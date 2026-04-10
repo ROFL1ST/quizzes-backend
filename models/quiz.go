@@ -15,5 +15,5 @@ type Quiz struct {
 	Creator     User       `json:"-" gorm:"foreignKey:CreatorID"`
 	IsPublic    bool       `json:"is_public" gorm:"default:false"` // Muncul di pencarian?
 	Status      string     `json:"status" gorm:"default:'draft'"`  // draft, published, archived
-	Questions   []Question `json:"-" gorm:"foreignKey:QuizID"`
+	Questions   []Question `json:"questions" gorm:"foreignKey:QuizID"`
 }

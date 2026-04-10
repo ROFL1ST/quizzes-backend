@@ -188,8 +188,8 @@ func GetClassroomDetails(c *fiber.Ctx) error {
 	}
 
 	var assignments []models.Assignment
-	config.DB.Preload("Quiz").Where("classroom_id = ?", id).Find(&assignments)
-
+	config.DB.Preload("Quiz.Questions").Where("classroom_id = ?", id).Find(&assignments)
+	
 	// Check my submissions for these assignments
 	mySubmissions := make(map[uint]models.History)
 	if len(assignments) > 0 {

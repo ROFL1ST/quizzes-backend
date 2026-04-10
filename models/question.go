@@ -16,7 +16,7 @@ const (
 type Question struct {
 	gorm.Model
 	QuizID         uint           `json:"quiz_id"`
-	Quiz           Quiz           `json:"quiz" gorm:"foreignKey:QuizID"`
+	Quiz           Quiz           `json:"-" gorm:"foreignKey:QuizID"`
 	QuestionText   string         `json:"question"`
 	Options        pq.StringArray `json:"options" gorm:"type:text[]"`
 	CorrectAnswer  string         `json:"correct"`
