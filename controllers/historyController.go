@@ -40,6 +40,29 @@ func SaveHistory(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid data", err.Error())
 	}
 
+	// Validasi Deadline Assignment — Tolak jika sudah lewat
+	if input.AssignmentID != nil && *input.AssignmentID != 0 {
+		var assignment models.Assignment
+		if err := config.DB.First(&assignment, *input.AssignmentID).Error; err == nil {
+			if assignment.Deadline != "" {
+				// Parse deadline (format: "YYYY-MM-DD HH:mm:ss" atau "YYYY-MM-DD")
+				layouts := []string{"2006-01-02 15:04:05", "2006-01-02T15:04:05Z", "2006-01-02"}
+				var deadline time.Time
+				var parsed bool
+				for _, layout := range layouts {
+					if t, err := time.Parse(layout, assignment.Deadline); err == nil {
+						deadline = t
+						parsed = true
+						break
+					}
+				}
+				if parsed && time.Now().After(deadline) {
+					return utils.ErrorResponse(c, fiber.StatusForbidden, "Deadline has passed. This assignment can no longer be submitted.", nil)
+				}
+			}
+		}
+	}
+
 	// Init ML Client for AI Grading
 	mlURL := os.Getenv("ML_SERVICE_URL")
 	if mlURL == "" {
