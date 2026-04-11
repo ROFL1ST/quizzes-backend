@@ -93,6 +93,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// shop routes admin
 	shopAdmin := adminGroup.Group("/shop", middleware.AllowRoles("supervisor", "admin"))
+	shopAdmin.Get("/items", controllers.GetAllShopItemsAdmin)
 	shopAdmin.Post("/items", controllers.CreateShopItem)
 	shopAdmin.Put("/items/:id", controllers.UpdateShopItem)
 	shopAdmin.Delete("/items/:id", controllers.DeleteShopItem)

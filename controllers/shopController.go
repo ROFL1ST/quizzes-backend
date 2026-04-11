@@ -18,6 +18,23 @@ func GetShopItems(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusOK, "Shop items retrieved", items)
 }
 
+// GetAllShopItemsAdmin: Untuk admin — semua item termasuk yang inactive, dengan pagination
+func GetAllShopItemsAdmin(c *fiber.Ctx) error {
+	params := utils.GetPaginationParams(c)
+	var items []models.Item
+	var total int64
+
+	if err := config.DB.Model(&models.Item{}).Count(&total).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to count items", nil)
+	}
+
+	if err := config.DB.Order("created_at desc").Limit(params.PageSize).Offset(params.Offset).Find(&items).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch items", nil)
+	}
+
+	return utils.PaginatedSuccessResponse(c, fiber.StatusOK, "Items retrieved", items, total, params)
+}
+
 // BuyItem: Membeli barang
 func BuyItem(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(float64) // Dari JWT Middleware
