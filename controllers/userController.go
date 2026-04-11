@@ -9,6 +9,7 @@ import (
 	// "golang.org/x/crypto/bcrypt"
 	"fmt"
 	"math"
+	"time"
 )
 
 // Struct untuk Response Profile yang rapi
@@ -215,31 +216,36 @@ func UpdateProfile(c *fiber.Ctx) error {
 		user.Email = input.Email
 		user.IsEmailVerified = false
 
-		// 3. Generate Token menggunakan Utility baru
+		// 3. Generate Token
 		token, err := utils.GenerateToken()
 		if err != nil {
 			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to generate verification token", err.Error())
 		}
-		user.EmailVerificationToken = token
 
-		// 4. Kirim Email Verifikasi (Gunakan Goroutine agar tidak blocking)
+		// 4. Hapus token lama (jika ada) & simpan ke tabel email_verifications
+		config.DB.Where("user_id = ?", user.ID).Delete(&models.EmailVerification{})
+		emailVerif := models.EmailVerification{
+			UserID:    user.ID,
+			Email:     input.Email,
+			Token:     token,
+			ExpiredAt: time.Now().Add(24 * time.Hour),
+		}
+		config.DB.Create(&emailVerif)
+
+		// 5. Kirim Email Verifikasi (Goroutine agar tidak blocking)
 		go func(emailAddr, tokenStr string) {
-			// Pastikan fungsi SendVerificationEmail sudah ada di utils/email.go
 			err := utils.SendVerificationEmail(emailAddr, tokenStr)
 			if err != nil {
 				fmt.Println("Error sending verification email:", err)
 			} else {
 				fmt.Println("Verification email sent to:", emailAddr)
 			}
-		}(user.Email, user.EmailVerificationToken)
+		}(input.Email, token)
 	}
 
 	if err := config.DB.Save(&user).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update profile", err.Error())
 	}
-
-	// Sembunyikan token dari response
-	user.EmailVerificationToken = ""
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Profile updated. Please check email to verify.", fiber.Map{"user": user})
 }
@@ -253,14 +259,23 @@ func VerifyEmail(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", nil)
 	}
 
-	var user models.User
-	if err := config.DB.Where("email_verification_token = ?", input.Token).First(&user).Error; err != nil {
+	// Cari token di tabel email_verifications (cek expired juga)
+	var emailVerif models.EmailVerification
+	if err := config.DB.Where("token = ? AND expired_at > ?", input.Token, time.Now()).First(&emailVerif).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid or expired token", nil)
 	}
 
+	// Update status verifikasi user
+	var user models.User
+	if err := config.DB.First(&user, emailVerif.UserID).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", nil)
+	}
+
 	user.IsEmailVerified = true
-	user.EmailVerificationToken = "" // Hapus token setelah dipakai
 	config.DB.Save(&user)
+
+	// Hapus token setelah dipakai
+	config.DB.Delete(&emailVerif)
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Email verified successfully", nil)
 }

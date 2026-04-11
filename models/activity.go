@@ -4,7 +4,7 @@ import "gorm.io/gorm"
 
 type Activity struct {
 	gorm.Model
-	UserID      uint   `json:"user_id"`
+	UserID      uint   `json:"user_id" gorm:"index"`
 	User        User   `json:"user" gorm:"foreignKey:UserID"`
 	Type        string `json:"type"` 
 	Description string `json:"description"`

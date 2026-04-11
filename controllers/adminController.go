@@ -593,24 +593,60 @@ func CreateShopItem(c *fiber.Ctx) error {
 
 func UpdateShopItem(c *fiber.Ctx) error {
 	id := c.Params("id")
+
+	// Ambil state lama sebelum diupdate
 	var item models.Item
 	if err := config.DB.First(&item, id).Error; err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Item not found", nil)
 	}
+
+	wasActive := item.IsActive
+
 	if err := c.BodyParser(&item); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid input", err.Error())
 	}
-	if err := config.DB.Save(&item).Error; err != nil {
+
+	tx := config.DB.Begin()
+
+	if err := tx.Save(&item).Error; err != nil {
+		tx.Rollback()
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed update item", err.Error())
 	}
+
+	// Jika item baru saja di-deactivate, auto-unequip dari semua user
+	if wasActive && !item.IsActive {
+		if err := tx.Model(&models.UserItem{}).
+			Where("item_id = ? AND is_equipped = ?", item.ID, true).
+			Update("is_equipped", false).Error; err != nil {
+			tx.Rollback()
+			return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to unequip item from users", err.Error())
+		}
+	}
+
+	tx.Commit()
 	return utils.SuccessResponse(c, fiber.StatusOK, "Item updated", item)
 }
 
+
 func DeleteShopItem(c *fiber.Ctx) error {
 	id := c.Params("id")
-	if err := config.DB.Delete(&models.Item{}, id).Error; err != nil {
+
+	tx := config.DB.Begin()
+
+	// Unequip dari semua user terlebih dahulu
+	if err := tx.Model(&models.UserItem{}).
+		Where("item_id = ? AND is_equipped = ?", id, true).
+		Update("is_equipped", false).Error; err != nil {
+		tx.Rollback()
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to unequip item", err.Error())
+	}
+
+	if err := tx.Delete(&models.Item{}, id).Error; err != nil {
+		tx.Rollback()
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed delete item", err.Error())
 	}
+
+	tx.Commit()
 	return utils.SuccessResponse(c, fiber.StatusOK, "Item deleted", nil)
 }
 
