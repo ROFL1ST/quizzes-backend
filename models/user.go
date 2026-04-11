@@ -12,7 +12,7 @@ type User struct {
 	Username               string     `json:"username" gorm:"unique;not null"`
 	Email                  string     `json:"email" gorm:"unique;default:null"`
 	IsEmailVerified        bool       `json:"is_email_verified" gorm:"default:false"`
-	EmailVerificationToken string     `json:"-" gorm:"default:null"`
+
 	Password               string     `json:"-"`
 	XP                     int64      `json:"xp" gorm:"default:0"`
 	Level                  int        `json:"level" gorm:"default:1"`
@@ -29,6 +29,14 @@ type User struct {
 type PasswordReset struct {
 	gorm.Model
 	Email     string    `json:"email" gorm:"index;not null"`
+	Token     string    `json:"token" gorm:"unique;not null"`
+	ExpiredAt time.Time `json:"expired_at"`
+}
+
+type EmailVerification struct {
+	gorm.Model
+	UserID    uint      `json:"user_id" gorm:"index;not null"`
+	Email     string    `json:"email" gorm:"not null"`
 	Token     string    `json:"token" gorm:"unique;not null"`
 	ExpiredAt time.Time `json:"expired_at"`
 }

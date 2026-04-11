@@ -27,12 +27,4 @@ type Question struct {
 	Difficulty     float64        `json:"difficulty" gorm:"default:0.5"` // 0.0 to 1.0
 }
 
-type QuestionAnalysis struct {
-	ID             uint   `json:"id"`
-	QuestionText   string `json:"question_text"`
-	CorrectCount   int    `json:"correct_count"`
-	IncorrectCount int    `json:"incorrect_count"`
-	TotalAttempts  int    `json:"total_attempts"`
-	Difficulty     string `json:"difficulty"`
-	AccuracyRate   string `json:"accuracy_rate"`
-}
+
