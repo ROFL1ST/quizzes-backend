@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"strconv"
+	"time"
 
 	"github.com/ROFL1ST/quizzes-backend/config"
 	"github.com/ROFL1ST/quizzes-backend/models"
@@ -103,19 +104,95 @@ func GetMyClassrooms(c *fiber.Ctx) error {
 
 	// If Teacher: Get classes they created
 	var teaching []models.Classroom
-	config.DB.Where("teacher_id = ?", userID).Find(&teaching)
+	config.DB.Preload("Members").Where("teacher_id = ?", userID).Find(&teaching)
 
 	// If Student: Get classes they joined
 	var joining []models.Classroom
-	config.DB.Joins("JOIN classroom_members ON classroom_members.classroom_id = classrooms.id").
+	config.DB.Preload("Members").
+		Joins("JOIN classroom_members ON classroom_members.classroom_id = classrooms.id").
 		Where("classroom_members.student_id = ?", userID).
 		Find(&joining)
 
+	// Kumpulkan semua classroom IDs
+	allIDs := []uint{}
+	for _, c := range teaching {
+		allIDs = append(allIDs, c.ID)
+	}
+	for _, c := range joining {
+		allIDs = append(allIDs, c.ID)
+	}
+
+	// Ambil assignment yang deadline-nya dalam 7 hari ke depan
+	type UpcomingAssignment struct {
+		ID          uint   `json:"id"`
+		ClassroomID uint   `json:"classroom_id"`
+		QuizID      uint   `json:"quiz_id"`
+		Deadline    string `json:"deadline"`
+		DaysLeft    int    `json:"days_left"`
+	}
+
+	upcomingMap := make(map[uint][]UpcomingAssignment) // classroom_id -> list
+
+	if len(allIDs) > 0 {
+		var assignments []models.Assignment
+		config.DB.Preload("Quiz").
+			Where("classroom_id IN ? AND deadline != ''", allIDs).
+			Find(&assignments)
+
+		now := time.Now()
+		sevenDaysLater := now.AddDate(0, 0, 7)
+
+		layouts := []string{"2006-01-02 15:04:05", "2006-01-02T15:04:05Z", "2006-01-02"}
+
+		for _, a := range assignments {
+			var deadline time.Time
+			var parsed bool
+			for _, layout := range layouts {
+				if t, err := time.Parse(layout, a.Deadline); err == nil {
+					deadline = t
+					parsed = true
+					break
+				}
+			}
+			if !parsed || now.After(deadline) {
+				continue // Skip expired atau tidak bisa di-parse
+			}
+			if deadline.Before(sevenDaysLater) {
+				daysLeft := int(deadline.Sub(now).Hours()/24) + 1
+				upcomingMap[a.ClassroomID] = append(upcomingMap[a.ClassroomID], UpcomingAssignment{
+					ID:          a.ID,
+					ClassroomID: a.ClassroomID,
+					QuizID:      a.QuizID,
+					Deadline:    a.Deadline,
+					DaysLeft:    daysLeft,
+				})
+			}
+		}
+	}
+
+	// Tambahkan field upcoming_assignments ke setiap classroom
+	type ClassroomWithUpcoming struct {
+		models.Classroom
+		UpcomingAssignments []UpcomingAssignment `json:"upcoming_assignments"`
+	}
+
+	toClassroomWithUpcoming := func(classrooms []models.Classroom) []ClassroomWithUpcoming {
+		result := make([]ClassroomWithUpcoming, len(classrooms))
+		for i, cl := range classrooms {
+			result[i] = ClassroomWithUpcoming{
+				Classroom:           cl,
+				UpcomingAssignments: upcomingMap[cl.ID],
+			}
+		}
+		return result
+	}
+
 	return utils.SuccessResponse(c, fiber.StatusOK, "Classrooms retrieved", fiber.Map{
-		"teaching": teaching,
-		"joining":  joining,
+		"teaching": toClassroomWithUpcoming(teaching),
+		"joining":  toClassroomWithUpcoming(joining),
 	})
 }
+
 
 // CreateAssignment (Teacher only)
 func CreateAssignment(c *fiber.Ctx) error {
