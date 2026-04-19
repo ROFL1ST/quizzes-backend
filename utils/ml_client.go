@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -42,12 +43,14 @@ type EssayGradingResponse struct {
 // MLClient handles communication with the Python ML Service
 type MLClient struct {
 	BaseURL    string
+	APIKey     string
 	HTTPClient *http.Client
 }
 
 func NewMLClient(baseURL string) *MLClient {
 	return &MLClient{
 		BaseURL: baseURL,
+		APIKey:  os.Getenv("API_KEY"),
 		HTTPClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},
@@ -68,7 +71,16 @@ func (c *MLClient) GetRecommendation(userID, quizID uint, history []UserHistoryI
 	}
 
 	url := fmt.Sprintf("%s/recommend", c.BaseURL)
-	resp, err := c.HTTPClient.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.APIKey != "" {
+		req.Header.Set("X-API-KEY", c.APIKey)
+	}
+
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +113,16 @@ func (c *MLClient) GradeEssay(questionText, teacherKey, studentAnswer string) (*
 	}
 
 	url := fmt.Sprintf("%s/grade-essay", c.BaseURL)
-	resp, err := c.HTTPClient.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.APIKey != "" {
+		req.Header.Set("X-API-KEY", c.APIKey)
+	}
+
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
