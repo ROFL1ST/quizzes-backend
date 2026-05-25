@@ -168,8 +168,12 @@ func GetNextAdaptiveQuestion(c *fiber.Ctx) error {
 					// isCorrect defaults to false.
 				}
 
+			case models.QuestionTypeBoolean:
+				if utils.IsBooleanMatch(ans.UserAnswer, q.CorrectAnswer) {
+					isCorrect = true
+				}
 			default:
-				// mcq, boolean
+				// mcq
 				if ans.UserAnswer == q.CorrectAnswer {
 					isCorrect = true
 				}

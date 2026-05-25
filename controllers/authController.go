@@ -438,25 +438,27 @@ func CreateAdmin(c *fiber.Ctx) error {
 }
 
 func Logout(c *fiber.Ctx) error {
-	// Logout User
+
 	c.Cookie(&fiber.Cookie{
 		Name:     "user_jwt",
 		Value:    "",
 		Expires:  time.Now().Add(-time.Hour),
 		HTTPOnly: true,
-		SameSite: "Lax",
+		Secure:   true,
+		SameSite: "None",
 	})
 	return utils.SuccessResponse(c, fiber.StatusOK, "User logged out successfully", nil)
 }
 
 func LogoutAdmin(c *fiber.Ctx) error {
-	// Logout Admin
+
 	c.Cookie(&fiber.Cookie{
 		Name:     "admin_jwt",
 		Value:    "",
 		Expires:  time.Now().Add(-time.Hour),
 		HTTPOnly: true,
-		SameSite: "Lax",
+		Secure:   true,
+		SameSite: "None",
 	})
 	return utils.SuccessResponse(c, fiber.StatusOK, "Admin logged out successfully", nil)
 }

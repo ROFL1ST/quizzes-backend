@@ -171,7 +171,11 @@ func SaveHistory(c *fiber.Ctx) error {
 					}
 				}
 
-			case "boolean", "mcq":
+			case "boolean":
+				if utils.IsBooleanMatch(answer, q.CorrectAnswer) {
+					isCorrect = true
+				}
+			case "mcq":
 				if answer == q.CorrectAnswer {
 					isCorrect = true
 				}
@@ -356,6 +360,10 @@ func SaveHistory(c *fiber.Ctx) error {
 						if match {
 							isCorrect = true
 						}
+					}
+				case "boolean":
+					if utils.IsBooleanMatch(answer, q.CorrectAnswer) {
+						isCorrect = true
 					}
 				default:
 					if answer == q.CorrectAnswer {
